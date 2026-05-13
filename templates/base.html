@@ -19,6 +19,8 @@
         .table-header { border-bottom: 2px solid #f1f5f9; color: #64748b; text-transform: uppercase; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; }
         .table-row { border-bottom: 1px solid #f8fafc; transition: all 0.2s; }
         .table-row:hover { background-color: #f1f5f9; }
+        .terminal-float { position: fixed; bottom: 24px; right: 24px; z-index: 50; padding: 12px 20px; background: #0ea5e9; border-radius: 9999px; border: none; cursor: pointer; transition: transform 0.2s ease, background 0.2s ease; }
+        .terminal-float:hover { transform: translateY(-2px); background: #0284c7; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
@@ -106,11 +108,14 @@
             <span id="console-cmd" class="text-white/60 truncate">Waiting for input...</span>
         </div>
         <div class="flex items-center gap-6 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">
-            <button onclick="openTerminal()" class="hover:text-white transition-all">Terminal</button>
             <button onclick="clearConsole()" class="hover:text-white transition-all">Clear</button>
             <button id="collapse-btn" onclick="toggleConsole()" class="text-sky-500 hover:text-sky-400 transition-all">Collapse</button>
         </div>
     </footer>
+
+    <button onclick="openTerminal()" class="terminal-float text-white font-black uppercase tracking-widest shadow-xl shadow-sky-500/20">
+        Terminal
+    </button>
 
     <script>
         const socket = io();

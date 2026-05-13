@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Device, Log
 from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address
 from ssh_utils import run_batch_config
+from terminal_utils import connect_terminal_shell, read_shell_output, send_shell_command, close_terminal_shell
 import pandas as pd
 import io
 from datetime import datetime
@@ -356,29 +357,36 @@ def handle_terminal_connect(data):
     device_id = data.get('device_id')
     sid = request.sid
     device = Device.query.get(device_id)
-    
+
     if not device:
         emit('terminal_output', {'data': 'Device not found\n'})
         return
 
-    ssh = SSHManager(device.ip_address, device.username, device.password, device.port or 22)
-    success, msg = ssh.connect()
-    
+    success, msg, client, shell = connect_terminal_shell(
+        device.ip_address,
+        device.username,
+        device.password,
+        device.port or 22
+    )
+
     if not success:
         emit('terminal_output', {'data': f'Connection failed: {msg}\n'})
         return
 
-    shell = ssh.client.invoke_shell()
-    active_shells[sid] = {'shell': shell, 'client': ssh.client}
-    
+    active_shells[sid] = {'shell': shell, 'client': client}
+    initial_output = read_shell_output(shell, 0.5)
+    if initial_output:
+        emit('terminal_output', {'data': initial_output}, room=sid)
+
     def background_thread(session_id):
         while session_id in active_shells:
             sh = active_shells[session_id]['shell']
             if sh.recv_ready():
                 try:
-                    output = sh.recv(1024).decode('utf-8', errors='ignore')
-                    socketio.emit('terminal_output', {'data': output}, room=session_id)
-                except:
+                    output = sh.recv(4096).decode('utf-8', errors='ignore')
+                    if output:
+                        socketio.emit('terminal_output', {'data': output}, room=session_id)
+                except Exception:
                     break
             socketio.sleep(0.1)
 
@@ -388,21 +396,19 @@ def handle_terminal_connect(data):
 def handle_terminal_input(data):
     sid = request.sid
     input_text = data.get('data')
-    if sid in active_shells:
-        try:
-            active_shells[sid]['shell'].send(input_text)
-        except:
-            pass
+    if sid in active_shells and input_text:
+        shell = active_shells[sid]['shell']
+        if not input_text.endswith('\n'):
+            input_text += '\n'
+        success, err = send_shell_command(shell, input_text)
+        if not success:
+            emit('terminal_output', {'data': f'Error sending command: {err}\n'}, room=sid)
 
 @socketio.on('disconnect')
 def handle_disconnect():
     sid = request.sid
     if sid in active_shells:
-        try:
-            active_shells[sid]['shell'].close()
-            active_shells[sid]['client'].close()
-        except:
-            pass
+        close_terminal_shell(active_shells[sid]['client'], active_shells[sid]['shell'])
         del active_shells[sid]
 
 # --- Init Database ---
