@@ -11,10 +11,10 @@
                     <i class="fas fa-plus text-[10px]"></i>
                     Add New
                 </button>
-                <button onclick="location.reload()" class="flex items-center gap-2 text-slate-400 text-[11px] font-black uppercase tracking-widest hover:text-slate-600 transition-all">
+                <a href="{{ url_for('refresh_status') }}" class="flex items-center gap-2 text-slate-400 text-[11px] font-black uppercase tracking-widest hover:text-slate-600 transition-all">
                     <i class="fas fa-rotate text-[10px]"></i>
                     Refresh
-                </button>
+                </a>
             </div>
         </div>
         <div class="relative w-72">
@@ -30,7 +30,6 @@
                     <th class="px-6 py-4">Name</th>
                     <th class="px-6 py-4">Type</th>
                     <th class="px-6 py-4">Status</th>
-                    <th class="px-6 py-4">MAC Address</th>
                     <th class="px-6 py-4">IP Address</th>
                     <th class="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -58,7 +57,6 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-xs text-slate-300 font-mono">00:0C:29:A1:B2:C{{ loop.index }}</td>
                     <td class="px-6 py-4 text-xs font-bold text-slate-500 font-mono">{{ device.ip_address }}</td>
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">

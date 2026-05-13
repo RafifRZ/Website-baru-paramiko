@@ -39,15 +39,7 @@ class SSHManager:
     def check_interfaces_shell(self):
         if not self.client:
             return None, "Not connected"
-        try:
-            conn = self.client.invoke_shell()
-            conn.send("conf t\n")
-            conn.send("do sh ip int brief\n")
-            time.sleep(1)
-            output = conn.recv(65535).decode('utf-8')
-            return output, None
-        except Exception as e:
-            return None, str(e)
+        return self.execute_command('show ip interface brief')
 
     def get_router_info(self):
         commands = {
@@ -65,16 +57,31 @@ class SSHManager:
 
     def parse_interfaces(self, output):
         interfaces = []
-        lines = output.strip().split('\n')
-        for line in lines[2:]:  # Skip headers
+        lines = [line for line in output.strip().splitlines() if line.strip()]
+        if len(lines) <= 1:
+            return interfaces
+
+        for line in lines[1:]:
             parts = re.split(r'\s+', line.strip())
-            if len(parts) >= 4:
-                interfaces.append({
-                    'name': parts[0],
-                    'ip': parts[1],
-                    'status': parts[4],
-                    'protocol': parts[5]
-                })
+            if len(parts) >= 6:
+                name = parts[0]
+                ip = parts[1]
+                status = parts[-2]
+                protocol = parts[-1]
+            elif len(parts) >= 4:
+                name = parts[0]
+                ip = parts[1]
+                status = parts[-1]
+                protocol = 'unknown'
+            else:
+                continue
+
+            interfaces.append({
+                'name': name,
+                'ip': ip,
+                'status': status,
+                'protocol': protocol
+            })
         return interfaces
 
     def configure_interface(self, interface, action, ip=None, mask=None):

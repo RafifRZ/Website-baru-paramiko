@@ -122,6 +122,11 @@ def add_device():
     except ValueError:
         port = 22
 
+    existing = Device.query.filter((Device.ip_address == ip) | (Device.hostname == hostname)).first()
+    if existing:
+        flash('Router dengan IP atau hostname ini sudah terdaftar.')
+        return redirect(url_for('dashboard'))
+
     ssh = SSHManager(ip, username, password, port)
     success, msg = ssh.connect()
     if not success:
@@ -134,6 +139,19 @@ def add_device():
     log_action(f"Added device {hostname} ({ip}:{port})")
     flash('Device registered successfully')
     ssh.close()
+    return redirect(url_for('dashboard'))
+
+@app.route('/refresh-status')
+@login_required
+def refresh_status():
+    devices = Device.query.all()
+    for device in devices:
+        ssh = SSHManager(device.ip_address, device.username, device.password, device.port or 22)
+        success, _ = ssh.connect()
+        ssh.close()
+        device.status = 'Online' if success else 'Offline'
+    db.session.commit()
+    flash('Status perangkat berhasil diperbarui.')
     return redirect(url_for('dashboard'))
 
 @app.route('/device/delete/<int:device_id>')
