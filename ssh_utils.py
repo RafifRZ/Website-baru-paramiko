@@ -57,24 +57,30 @@ class SSHManager:
 
     def parse_interfaces(self, output):
         interfaces = []
+        if not output or not isinstance(output, str):
+            return interfaces
+
         lines = [line for line in output.strip().splitlines() if line.strip()]
         if len(lines) <= 1:
             return interfaces
 
+        # skip header line and parse remaining rows
         for line in lines[1:]:
             parts = re.split(r'\s+', line.strip())
+            if len(parts) < 4:
+                continue
+
+            name = parts[0]
+            ip = parts[1] if len(parts) > 1 else 'unassigned'
             if len(parts) >= 6:
-                name = parts[0]
-                ip = parts[1]
                 status = parts[-2]
                 protocol = parts[-1]
-            elif len(parts) >= 4:
-                name = parts[0]
-                ip = parts[1]
+            elif len(parts) == 5:
+                status = parts[-2]
+                protocol = parts[-1]
+            else:
                 status = parts[-1]
                 protocol = 'unknown'
-            else:
-                continue
 
             interfaces.append({
                 'name': name,

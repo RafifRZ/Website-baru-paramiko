@@ -16,7 +16,11 @@
         <div class="flex items-center gap-3 text-slate-400 font-bold text-xs uppercase tracking-widest">
             <span>{{ device.ip_address }}:{{ device.port or 22 }}</span>
             <span class="text-slate-200">|</span>
-            <span>cisco_ios</span>
+            <span>{{ device.device_type or 'cisco_ios' }}</span>
+            <span class="text-slate-200">|</span>
+            <span class="text-emerald-500 font-black uppercase tracking-widest">{{ device.status or 'Unknown' }}</span>
+            <span class="text-slate-200">|</span>
+            <span class="text-slate-400">{{ interface_count }} Interfaces</span>
         </div>
     </div>
     <div class="flex items-center gap-3">
@@ -85,9 +89,13 @@
                 <div>
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Interface</label>
                     <select name="interface" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer">
-                        {% for interface in interfaces %}
-                        <option value="{{ interface.name }}">{{ interface.name }} | {{ interface.ip }}</option>
-                        {% endfor %}
+                        {% if interfaces %}
+                            {% for interface in interfaces %}
+                            <option value="{{ interface.name }}">{{ interface.name }} | {{ interface.ip }}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="" disabled selected>No interface data available</option>
+                        {% endif %}
                     </select>
                 </div>
                 <div>

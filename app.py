@@ -188,22 +188,32 @@ def device_detail(device_id):
     device = Device.query.get_or_404(device_id)
     ssh = SSHManager(device.ip_address, device.username, device.password, device.port or 22)
     success, msg = ssh.connect()
-    
+
     if not success:
-        return render_template('device_detail.html', device=device, error=msg)
-    
+        if device.status != 'Offline':
+            device.status = 'Offline'
+            db.session.commit()
+        return render_template('device_detail.html', device=device, error=msg, interfaces=[], interface_count=0)
+
+    if device.status != 'Online':
+        device.status = 'Online'
+        db.session.commit()
+
     info = ssh.get_router_info()
     shell_output, shell_err = ssh.check_interfaces_shell()
-    
-    if shell_err:
-        interfaces = ssh.parse_interfaces(info.get('interfaces', ''))
-    else:
-        # Use shell output for parsing if available
-        interfaces = ssh.parse_interfaces(shell_output)
-        
+
+    interface_data = None
+    if shell_output:
+        interface_data = shell_output
+    elif info.get('interfaces'):
+        interface_data = info.get('interfaces')
+
+    interfaces = ssh.parse_interfaces(interface_data)
+    interface_count = len(interfaces)
+
     ssh.close()
-    
-    return render_template('device_detail.html', device=device, info=info, interfaces=interfaces)
+
+    return render_template('device_detail.html', device=device, info=info, interfaces=interfaces, interface_count=interface_count)
 
 @app.route('/device/<int:device_id>/configure_ip', methods=['POST'])
 @login_required
