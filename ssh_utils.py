@@ -31,15 +31,33 @@ class SSHManager:
         if not self.client:
             return None, "Not connected"
         try:
-            stdin, stdout, stderr = self.client.exec_command(command)
-            return stdout.read().decode('utf-8'), None
+            stdin, stdout, stderr = self.client.exec_command(command, get_pty=True)
+            output = stdout.read().decode('utf-8', errors='ignore')
+            error = stderr.read().decode('utf-8', errors='ignore')
+            if error.strip():
+                return output, error.strip()
+            return output, None
         except Exception as e:
             return None, str(e)
 
     def check_interfaces_shell(self):
         if not self.client:
             return None, "Not connected"
-        return self.execute_command('show ip interface brief')
+
+        output, err = self.execute_command('terminal length 0\nshow ip interface brief')
+        if err or not output or not output.strip():
+            try:
+                shell = self.client.invoke_shell()
+                time.sleep(0.5)
+                shell.send('terminal length 0\n')
+                shell.send('show ip interface brief\n')
+                time.sleep(1.5)
+                output = shell.recv(65535).decode('utf-8', errors='ignore')
+                return output, None
+            except Exception as e:
+                return None, str(e)
+
+        return output, None
 
     def get_router_info(self):
         commands = {
@@ -60,18 +78,28 @@ class SSHManager:
         if not output or not isinstance(output, str):
             return interfaces
 
-        lines = [line for line in output.strip().splitlines() if line.strip()]
-        if len(lines) <= 1:
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        if not lines:
             return interfaces
 
-        # skip header line and parse remaining rows
-        for line in lines[1:]:
-            parts = re.split(r'\s+', line.strip())
+        header_index = None
+        for idx, line in enumerate(lines):
+            if re.match(r'^(#)?\s*interface\b', line, re.IGNORECASE) or re.match(r'^Interface\s+IP-Address', line, re.IGNORECASE):
+                header_index = idx
+                break
+
+        if header_index is None:
+            # fallback: assume first non-empty line is header
+            header_index = 0
+
+        for line in lines[header_index + 1:]:
+            parts = re.split(r'\s+', line)
             if len(parts) < 4:
                 continue
 
             name = parts[0]
             ip = parts[1] if len(parts) > 1 else 'unassigned'
+
             if len(parts) >= 6:
                 status = parts[-2]
                 protocol = parts[-1]

@@ -222,16 +222,25 @@ def configure_ip(device_id):
     interface = request.form.get('interface')
     action = request.form.get('action')
     ip_raw = request.form.get('ip')
-    
-    # Parse IP and mask (e.g. 10.1.1.1/24)
-    ip = ip_raw
-    mask = "255.255.255.0"
-    if ip_raw and '/' in ip_raw:
-        parts = ip_raw.split('/')
-        ip = parts[0]
-        prefix = int(parts[1])
-        masks = {24: "255.255.255.0", 30: "255.255.255.252", 32: "255.255.255.255", 16: "255.255.0.0", 8: "255.0.0.0"}
-        mask = masks.get(prefix, "255.255.255.0")
+
+    ip = None
+    mask = None
+    if action == 'Add IP':
+        if not ip_raw:
+            flash('Masukkan IP address sebelum menambahkan IP.')
+            return redirect(url_for('device_detail', device_id=device_id))
+
+        ip = ip_raw
+        mask = "255.255.255.0"
+        if '/' in ip_raw:
+            parts = ip_raw.split('/')
+            ip = parts[0]
+            try:
+                prefix = int(parts[1])
+            except ValueError:
+                prefix = 24
+            masks = {24: "255.255.255.0", 30: "255.255.255.252", 32: "255.255.255.255", 16: "255.255.0.0", 8: "255.0.0.0"}
+            mask = masks.get(prefix, "255.255.255.0")
     
     ssh = SSHManager(device.ip_address, device.username, device.password, device.port or 22)
     success, msg = ssh.connect()
