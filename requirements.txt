@@ -7,3 +7,4 @@ netmiko
 python-dotenv
 eventlet
 pandas
+pytz

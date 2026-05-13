@@ -5,10 +5,12 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Device, Log
-from ssh_utils import SSHManager, run_batch_config
+from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address
+from ssh_utils import run_batch_config
 import pandas as pd
 import io
 from datetime import datetime
+import pytz
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
@@ -32,7 +34,9 @@ def load_user(user_id):
 
 def log_action(action, level='INFO', device_id=None):
     user_id = current_user.id if current_user.is_authenticated else None
-    new_log = Log(action=action, level=level, device_id=device_id, user_id=user_id)
+    jakarta_tz = pytz.timezone('Asia/Jakarta')
+    timestamp = datetime.now(jakarta_tz)
+    new_log = Log(action=action, level=level, device_id=device_id, user_id=user_id, timestamp=timestamp)
     db.session.add(new_log)
     db.session.commit()
 
@@ -69,8 +73,6 @@ def dashboard():
     stats = {
         'total': len(devices),
         'online': Device.query.filter_by(status='Online').count(),
-        'cpu': '12.4%', # Example
-        'uptime': '4d 12h'
     }
     return render_template('dashboard.html', devices=devices, stats=stats)
 
@@ -104,9 +106,7 @@ def verify_device():
     except ValueError:
         port = 22
 
-    ssh = SSHManager(ip, username, password, port)
-    success, msg = ssh.connect()
-    ssh.close()
+    success, msg = check_router_status(ip, username, password, port)
     return jsonify({'success': success, 'message': msg})
 
 @app.route('/devices/add', methods=['POST'])
@@ -127,8 +127,7 @@ def add_device():
         flash('Router dengan IP atau hostname ini sudah terdaftar.')
         return redirect(url_for('dashboard'))
 
-    ssh = SSHManager(ip, username, password, port)
-    success, msg = ssh.connect()
+    success, msg = check_router_status(ip, username, password, port)
     if not success:
         flash('Router tidak dapat terhubung. Pastikan IP, port, dan kredensial benar.')
         return redirect(url_for('dashboard'))
@@ -138,7 +137,6 @@ def add_device():
     db.session.commit()
     log_action(f"Added device {hostname} ({ip}:{port})")
     flash('Device registered successfully')
-    ssh.close()
     return redirect(url_for('dashboard'))
 
 @app.route('/refresh-status')
@@ -146,9 +144,7 @@ def add_device():
 def refresh_status():
     devices = Device.query.all()
     for device in devices:
-        ssh = SSHManager(device.ip_address, device.username, device.password, device.port or 22)
-        success, _ = ssh.connect()
-        ssh.close()
+        success, _ = check_router_status(device.ip_address, device.username, device.password, device.port or 22)
         device.status = 'Online' if success else 'Offline'
     db.session.commit()
     flash('Status perangkat berhasil diperbarui.')
@@ -186,8 +182,7 @@ def update_device(device_id):
 @login_required
 def device_detail(device_id):
     device = Device.query.get_or_404(device_id)
-    ssh = SSHManager(device.ip_address, device.username, device.password, device.port or 22)
-    success, msg = ssh.connect()
+    success, msg = check_router_status(device.ip_address, device.username, device.password, device.port or 22)
 
     if not success:
         if device.status != 'Offline':
@@ -199,21 +194,10 @@ def device_detail(device_id):
         device.status = 'Online'
         db.session.commit()
 
-    info = ssh.get_router_info()
-    shell_output, shell_err = ssh.check_interfaces_shell()
-
-    interface_data = None
-    if shell_output:
-        interface_data = shell_output
-    elif info.get('interfaces'):
-        interface_data = info.get('interfaces')
-
-    interfaces = ssh.parse_interfaces(interface_data)
+    interfaces = get_interfaces(device.ip_address, device.username, device.password, device.port or 22)
     interface_count = len(interfaces)
 
-    ssh.close()
-
-    return render_template('device_detail.html', device=device, info=info, interfaces=interfaces, interface_count=interface_count)
+    return render_template('device_detail.html', device=device, interfaces=interfaces, interface_count=interface_count)
 
 @app.route('/device/<int:device_id>/configure_ip', methods=['POST'])
 @login_required
@@ -223,8 +207,6 @@ def configure_ip(device_id):
     action = request.form.get('action')
     ip_raw = request.form.get('ip')
 
-    ip = None
-    mask = None
     if action == 'Add IP':
         if not ip_raw:
             flash('Masukkan IP address sebelum menambahkan IP.')
@@ -241,22 +223,24 @@ def configure_ip(device_id):
                 prefix = 24
             masks = {24: "255.255.255.0", 30: "255.255.255.252", 32: "255.255.255.255", 16: "255.255.0.0", 8: "255.0.0.0"}
             mask = masks.get(prefix, "255.255.255.0")
-    
-    ssh = SSHManager(device.ip_address, device.username, device.password, device.port or 22)
-    success, msg = ssh.connect()
-    if not success:
-        flash(f"Connection failed: {msg}")
-        return redirect(url_for('device_detail', device_id=device_id))
         
-    success, output = ssh.configure_interface(interface, action, ip, mask)
-    ssh.close()
+        success, msg = add_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip, mask)
+    elif action == 'Remove IP':
+        if not ip_raw:
+            flash('Masukkan IP address sebelum menghapus IP.')
+            return redirect(url_for('device_detail', device_id=device_id))
+        
+        success, msg = remove_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip_raw)
+    else:
+        flash('Action tidak valid.')
+        return redirect(url_for('device_detail', device_id=device_id))
     
     if success:
-        log_action(f"Performed {action} on {interface} ({ip or ''}) for {device.hostname}", device_id=device.id)
+        log_action(f"Performed {action} on {interface} ({ip_raw or ''}) for {device.hostname}", device_id=device.id)
         flash(f'Successfully performed {action} on {interface}')
     else:
-        log_action(f"Failed to configure {interface} on {device.hostname}: {output}", level='ERROR', device_id=device.id)
-        flash(f'Failed to configure {interface}: {output}')
+        log_action(f"Failed to configure {interface} on {device.hostname}: {msg}", level='ERROR', device_id=device.id)
+        flash(f'Failed to configure {interface}: {msg}')
     
     return redirect(url_for('device_detail', device_id=device_id))
 
@@ -265,10 +249,10 @@ def configure_ip(device_id):
 def batch_config():
     if request.method == 'POST':
         device_ids = request.form.getlist('devices')
-        config_text = request.form.get('config_text')
         raw_commands = request.form.get('raw_commands')
         csv_file = request.files.get('csv_file')
         commands = []
+        results = []
         if csv_file:
             try:
                 df = pd.read_csv(io.StringIO(csv_file.read().decode('utf-8')))
@@ -355,22 +339,7 @@ def all_interfaces():
 @login_required
 def system_logs():
     logs = Log.query.order_by(Log.timestamp.desc()).limit(100).all()
-    return render_template('logs.html', logs=logs)
-
-@app.route('/api/stats')
-@login_required
-def get_global_stats():
-    devices = Device.query.all()
-    total = len(devices)
-    online = Device.query.filter_by(status='Online').count()
-    
-    # In a real app, you might aggregate CPU/Uptime here
-    return jsonify({
-        'total_devices': total,
-        'online_devices': online,
-        'avg_cpu': "12.4%", # Placeholder or aggregate
-        'uptime': "4d 12h"
-    })
+    return render_template('logs.html', logs=logs)   
 
 @app.route('/terminal')
 @login_required
