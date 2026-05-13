@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="px-10 py-6">
+    <!-- Action Header -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-8">
+            <h3 class="text-lg font-black text-slate-800 tracking-tight">Interface List</h3>
+            <div class="flex items-center gap-4">
+                <button onclick="document.getElementById('addDeviceModal').classList.remove('hidden')" class="flex items-center gap-2 text-sky-500 text-[11px] font-black uppercase tracking-widest hover:text-sky-600 transition-all">
+                    <i class="fas fa-plus text-[10px]"></i>
+                    Add New
+                </button>
+                <button onclick="location.reload()" class="flex items-center gap-2 text-slate-400 text-[11px] font-black uppercase tracking-widest hover:text-slate-600 transition-all">
+                    <i class="fas fa-rotate text-[10px]"></i>
+                    Refresh
+                </button>
+            </div>
+        </div>
+        <div class="relative w-72">
+            <input type="text" placeholder="Filter interfaces..." class="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none">
+        </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="bg-white rounded-lg overflow-hidden border border-slate-100">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="table-header bg-white">
+                    <th class="px-6 py-4">Name</th>
+                    <th class="px-6 py-4">Type</th>
+                    <th class="px-6 py-4">Status</th>
+                    <th class="px-6 py-4">MAC Address</th>
+                    <th class="px-6 py-4">IP Address</th>
+                    <th class="px-6 py-4 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                <tr class="table-row group">
+                    <td class="px-6 py-4 text-xs font-bold text-slate-600">{{ device.hostname }}</td>
+                    <td class="px-6 py-4 text-xs text-slate-400 font-medium">Ethernet</td>
+                    <td class="px-6 py-4">
+                        {% if device.status == 'Online' %}
+                        <span class="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">
+                            <span class="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></span>
+                            Online
+                        </span>
+                        {% elif device.status == 'Offline' %}
+                        <span class="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5">
+                            <span class="w-1 h-1 bg-rose-500 rounded-full"></span>
+                            Offline
+                        </span>
+                        {% else %}
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <span class="w-1 h-1 bg-slate-400 rounded-full"></span>
+                            {{ device.status }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-xs text-slate-300 font-mono">00:0C:29:A1:B2:C{{ loop.index }}</td>
+                    <td class="px-6 py-4 text-xs font-bold text-slate-500 font-mono">{{ device.ip_address }}</td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
+                            <a href="{{ url_for('device_detail', device_id=device.id) }}" class="text-slate-400 hover:text-emerald-500 transition-all" title="Manage Interfaces">
+                                <i class="fas fa-network-wired text-xs"></i>
+                            </a>
+                            <button onclick="editDevice('{{ device.id }}', '{{ device.hostname }}', '{{ device.ip_address }}', '{{ device.username }}', '{{ device.port or 22 }}')" class="text-slate-400 hover:text-sky-500 transition-all" title="Edit Credentials">
+                                <i class="fas fa-pencil-alt text-xs"></i>
+                            </button>
+                            <a href="{{ url_for('delete_device', device_id=device.id) }}" class="text-slate-400 hover:text-rose-500 transition-all" onclick="return confirm('Hapus perangkat {{ device.hostname }}?')" title="Delete Device">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- Table Footer -->
+        <div class="px-6 py-4 bg-white border-t border-slate-50 flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            <div class="flex gap-6">
+                <span>Total: {{ stats.total }} devices</span>
+                <span>Online: {{ stats.online }}</span>
+                <span class="text-emerald-500 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                    System Synchronized
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Stats Grid -->
+    <div class="grid grid-cols-1 gap-6 mt-12 mb-8">
+        <div class="stats-card p-8 rounded-xl group hover:shadow-xl hover:shadow-slate-200/50 transition-all">
+            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">NETWORK NODES</h4>
+            <div class="flex items-center gap-3">
+                <span class="text-3xl font-black text-emerald-500 leading-none">{{ stats.total }}</span>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Registered</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Add Device -->
+<div id="addDeviceModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+        <div class="px-10 py-8 border-b border-slate-50 flex justify-between items-center">
+            <h3 class="text-xl font-black text-slate-800 tracking-tight italic">Register Node</h3>
+            <button onclick="document.getElementById('addDeviceModal').classList.add('hidden')" class="text-slate-300 hover:text-slate-500 transition-all">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form action="{{ url_for('add_device') }}" method="POST" class="p-10 space-y-6" id="addDeviceForm">
+            <div class="grid grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Hostname</label>
+                    <input type="text" name="hostname" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="e.g. R1" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">IP Address</label>
+                    <input type="text" name="ip" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="192.168.1.1" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">SSH Port</label>
+                    <input type="number" name="port" value="22" min="1" max="65535" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="22">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">SSH User</label>
+                    <input type="text" name="username" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="admin" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">SSH Pass</label>
+                    <input type="password" name="password" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" required>
+                </div>
+            </div>
+            <input type="hidden" id="device-verified" name="verified" value="0">
+            <div class="pt-6 space-y-3">
+                <button type="button" id="verifyDeviceBtn" onclick="verifyDeviceConnection()" class="w-full py-5 bg-sky-500 text-white font-black uppercase tracking-widest text-xs rounded hover:bg-sky-600 transition-all shadow-xl shadow-sky-100">
+                    Verify Router
+                </button>
+                <button type="submit" id="submitDeviceBtn" class="w-full py-5 bg-emerald-500 text-white font-black uppercase tracking-widest text-xs rounded hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-100 hidden" disabled>
+                    Add Device
+                </button>
+                <p id="verifyMessage" class="hidden text-sm font-bold rounded-xl px-4 py-3"></p>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal for Edit Device -->
+<div id="editDeviceModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+        <div class="px-10 py-8 border-b border-slate-50 flex justify-between items-center">
+            <h3 class="text-xl font-black text-slate-800 tracking-tight italic">Update Device Info</h3>
+            <button onclick="document.getElementById('editDeviceModal').classList.add('hidden')" class="text-slate-300 hover:text-slate-500 transition-all">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="editDeviceForm" action="" method="POST" class="p-10 space-y-6">
+            <div class="grid grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Hostname</label>
+                    <input type="text" name="hostname" id="edit-hostname" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">IP Address</label>
+                    <input type="text" name="ip" id="edit-ip" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">SSH Port</label>
+                    <input type="number" name="port" id="edit-port" min="1" max="65535" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="22">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">SSH User</label>
+                    <input type="text" name="username" id="edit-username" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">New Password (Leave blank to keep current)</label>
+                    <input type="password" name="password" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded text-sm font-bold text-slate-700 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••">
+                </div>
+            </div>
+            <div class="pt-6">
+                <button type="submit" class="w-full py-5 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    async function verifyDeviceConnection() {
+        const form = document.getElementById('addDeviceForm');
+        const verifyBtn = document.getElementById('verifyDeviceBtn');
+        const submitBtn = document.getElementById('submitDeviceBtn');
+        const message = document.getElementById('verifyMessage');
+
+        const ip = form.querySelector('[name="ip"]').value.trim();
+        const port = form.querySelector('[name="port"]').value.trim() || '22';
+        const username = form.querySelector('[name="username"]').value.trim();
+        const password = form.querySelector('[name="password"]').value;
+
+        if (!ip || !username || !password) {
+            alert('Lengkapi IP, user, dan password SSH terlebih dahulu.');
+            return;
+        }
+
+        verifyBtn.disabled = true;
+        verifyBtn.innerText = 'Checking...';
+        message.classList.add('hidden');
+
+        const data = new FormData();
+        data.append('ip', ip);
+        data.append('port', port);
+        data.append('username', username);
+        data.append('password', password);
+
+        try {
+            const response = await fetch('{{ url_for('verify_device') }}', {
+                method: 'POST',
+                body: data,
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                message.classList.remove('hidden');
+                message.classList.remove('text-rose-600', 'bg-rose-50');
+                message.classList.add('text-emerald-600', 'bg-emerald-50');
+                message.innerText = 'Router online. Klik Add Device untuk menyimpan.';
+                submitBtn.classList.remove('hidden');
+                submitBtn.disabled = false;
+                document.getElementById('device-verified').value = '1';
+                verifyBtn.classList.add('hidden');
+            } else {
+                message.classList.remove('hidden');
+                message.classList.remove('text-emerald-600', 'bg-emerald-50');
+                message.classList.add('text-rose-600', 'bg-rose-50');
+                message.innerText = 'Router mungkin sedang offline atau kredensial salah.';
+                alert('Router mungkin sedang offline atau kredensial salah.');
+            }
+        } catch (error) {
+            message.classList.remove('hidden');
+            message.classList.remove('text-emerald-600', 'bg-emerald-50');
+            message.classList.add('text-rose-600', 'bg-rose-50');
+            message.innerText = 'Terjadi kesalahan saat memverifikasi koneksi.';
+            alert('Terjadi kesalahan saat memverifikasi koneksi.');
+        } finally {
+            verifyBtn.disabled = false;
+            verifyBtn.innerText = 'Verify Router';
+        }
+    }
+
+    function editDevice(id, hostname, ip, username, port) {
+        document.getElementById('editDeviceForm').action = '/device/update/' + id;
+        document.getElementById('edit-hostname').value = hostname;
+        document.getElementById('edit-ip').value = ip;
+        document.getElementById('edit-username').value = username;
+        document.getElementById('edit-port').value = port;
+        document.getElementById('editDeviceModal').classList.remove('hidden');
+    }
+</script>
+{% endblock %}

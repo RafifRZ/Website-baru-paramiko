@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="px-10 py-6 h-full flex flex-col">
+    <div class="flex items-center justify-between mb-8 shrink-0">
+        <div>
+            <h3 class="text-lg font-black text-slate-800 tracking-tight">System Events & Logs</h3>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Real-time infrastructure auditing</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <button onclick="downloadLogs()" class="flex items-center gap-2 text-sky-500 text-[11px] font-black uppercase tracking-widest hover:underline">
+                <i class="fas fa-file-csv text-sm"></i>
+                Download CSV
+            </button>
+            <button onclick="window.location.reload()" class="px-6 py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-black transition-all">
+                Refresh Logs
+            </button>
+        </div>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+        <div class="overflow-y-auto flex-1">
+            <table id="logs-table" class="w-full text-left border-collapse">
+                <thead class="sticky top-0 bg-white z-10">
+                    <tr class="table-header">
+                        <th class="px-8 py-5">Timestamp</th>
+                        <th class="px-8 py-5">Severity</th>
+                        <th class="px-8 py-5">Source</th>
+                        <th class="px-8 py-5">Message</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                    {% for log in logs %}
+                    <tr class="hover:bg-slate-50/50 transition-all">
+                        <td class="px-8 py-4 text-[11px] font-bold text-slate-400 font-mono">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td class="px-8 py-4">
+                            {% if log.level == 'ERROR' %}
+                            <span class="px-2 py-1 bg-rose-50 text-rose-600 text-[9px] font-black uppercase rounded tracking-widest">ERROR</span>
+                            {% elif log.level == 'WARNING' %}
+                            <span class="px-2 py-1 bg-amber-50 text-amber-600 text-[9px] font-black uppercase rounded tracking-widest">WARNING</span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase rounded tracking-widest">INFO</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-8 py-4 text-xs font-black text-slate-700">
+                            {% if log.device_id %}
+                                DEVICE_{{ log.device_id }}
+                            {% else %}
+                                SYSTEM
+                            {% endif %}
+                        </td>
+                        <td class="px-8 py-4 text-xs text-slate-500">{{ log.action }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="px-8 py-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">No logs found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <!-- Footer Info -->
+        <div class="px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Showing latest 4 system events</p>
+            <div class="flex gap-2">
+                <button class="w-8 h-8 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-400 hover:text-sky-500 transition-all cursor-not-allowed">
+                    <i class="fas fa-chevron-left text-[10px]"></i>
+                </button>
+                <button class="w-8 h-8 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-400 hover:text-sky-500 transition-all cursor-not-allowed">
+                    <i class="fas fa-chevron-right text-[10px]"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function downloadLogs() {
+        const table = document.getElementById('logs-table');
+        let csv = [];
+        const rows = table.querySelectorAll('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = [], cols = rows[i].querySelectorAll('td, th');
+            
+            for (let j = 0; j < cols.length; j++) {
+                // Clean up the text (remove extra spaces and newlines)
+                let text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, "").trim();
+                row.push('"' + text + '"');
+            }
+            csv.push(row.join(","));
+        }
+
+        const csvContent = "data:text/csv;charset=utf-8," + csv.join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "paramaster_system_logs_" + new Date().toISOString().slice(0,10) + ".csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+{% endblock %}

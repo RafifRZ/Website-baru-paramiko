@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="px-10 py-6 h-full flex flex-col">
+    <div class="flex items-center justify-between mb-8 shrink-0">
+        <div>
+            <h3 class="text-lg font-black text-slate-800 tracking-tight">Interactive CLI Terminal</h3>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Direct SSH access to your network infrastructure</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <select id="device-select" class="px-4 py-2 bg-white border border-slate-100 rounded text-xs font-bold text-slate-600 focus:ring-1 focus:ring-sky-500 outline-none">
+                <option value="">Select Device...</option>
+                {% for device in devices %}
+                <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }})</option>
+                {% endfor %}
+            </select>
+            <button onclick="connectTerminal()" class="px-6 py-2 bg-sky-500 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-sky-600 transition-all shadow-lg shadow-sky-100">
+                Establish Session
+            </button>
+        </div>
+    </div>
+
+    <!-- Terminal Container -->
+    <div class="flex-1 bg-black rounded-2xl shadow-2xl overflow-hidden border border-slate-800 flex flex-col">
+        <!-- Terminal Header -->
+        <div class="px-6 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-rose-500"></div>
+                <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+                <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                <span class="ml-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">ssh_session_01.term</span>
+            </div>
+            <div id="connection-status" class="text-[9px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                <span id="status-dot" class="w-1.5 h-1.5 bg-slate-700 rounded-full"></span>
+                <span id="status-text">Disconnected</span>
+            </div>
+        </div>
+        
+        <!-- Terminal Output Area -->
+        <div id="terminal-output" class="flex-1 p-6 font-mono text-xs text-emerald-400 overflow-y-auto space-y-1 selection:bg-emerald-500/30">
+            <p class="text-slate-500">ParaMaster Interactive Shell</p>
+            <p class="text-slate-500">Type 'help' for available local commands or select a device to begin SSH.</p>
+            <p class="pt-2">user@paramaster:~$ <span class="animate-pulse">_</span></p>
+        </div>
+
+        <!-- Terminal Input -->
+        <div class="px-6 py-4 bg-slate-900 border-t border-slate-800">
+            <div class="flex items-center gap-3">
+                <span class="text-sky-500 font-mono text-xs font-bold">❯</span>
+                <input type="text" id="terminal-input" class="flex-1 bg-transparent border-none text-white font-mono text-xs outline-none" placeholder="Enter CLI command..." autocomplete="off">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const outputArea = document.getElementById('terminal-output');
+    const inputArea = document.getElementById('terminal-input');
+    const deviceSelect = document.getElementById('device-select');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+
+    function appendToTerminal(text, type = 'output') {
+        const p = document.createElement('p');
+        if (type === 'command') {
+            p.innerHTML = `<span class="text-sky-500 font-bold">❯ </span><span class="text-white font-bold">${text}</span>`;
+        } else if (type === 'error') {
+            p.innerHTML = `<span class="text-rose-500 font-bold">[ERROR] </span>${text}`;
+        } else {
+            // Support multi-line output
+            p.innerHTML = text.replace(/\n/g, '<br>');
+        }
+        outputArea.appendChild(p);
+        outputArea.scrollTop = outputArea.scrollHeight;
+    }
+
+    function connectTerminal() {
+        const deviceId = deviceSelect.value;
+        if (!deviceId) {
+            appendToTerminal('Please select a device first.', 'error');
+            return;
+        }
+
+        appendToTerminal(`Connecting to node [ID:${deviceId}]...`);
+        socket.emit('connect_terminal', { device_id: deviceId });
+        
+        statusDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse';
+        statusText.innerText = 'Connecting...';
+    }
+
+    inputArea.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            const cmd = inputArea.value;
+            if (cmd) {
+                appendToTerminal(cmd, 'command');
+                socket.emit('terminal_input', { data: cmd + '\n' });
+                inputArea.value = '';
+            }
+        }
+    });
+
+    socket.on('terminal_output', function(msg) {
+        if (msg.data.includes('Connection failed') || msg.data.includes('Device not found')) {
+            appendToTerminal(msg.data, 'error');
+            statusDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500';
+            statusText.innerText = 'Failed';
+        } else {
+            appendToTerminal(msg.data);
+            statusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
+            statusText.innerText = 'Connected';
+        }
+    });
+</script>
+{% endblock %}

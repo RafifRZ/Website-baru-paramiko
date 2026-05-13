@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="px-10 py-6">
+    <div class="flex items-center justify-between mb-8">
+        <h3 class="text-lg font-black text-slate-800 tracking-tight">Global Interface Inventory</h3>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregated from {{ devices|length }} active nodes</p>
+    </div>
+
+    <div class="bg-white rounded-lg overflow-hidden border border-slate-100">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="table-header bg-white">
+                    <th class="px-6 py-4">Node Hostname</th>
+                    <th class="px-6 py-4">Interface Name</th>
+                    <th class="px-6 py-4">IP Address</th>
+                    <th class="px-6 py-4">Status</th>
+                    <th class="px-6 py-4 text-right">Context</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                <tr class="table-row group cursor-pointer hover:bg-slate-50/50 transition-all" onclick="window.location.href='{{ url_for('device_detail', device_id=device.id) }}'">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center text-[10px]">
+                                <i class="fas fa-server"></i>
+                            </div>
+                            <span class="text-xs font-black text-slate-800">{{ device.hostname }}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-xs text-slate-500 font-bold">FastEthernet0/0</td>
+                    <td class="px-6 py-4 text-xs text-sky-500 font-mono font-bold">{{ device.ip_address }}</td>
+                    <td class="px-6 py-4">
+                        <span class="px-3 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase rounded-full tracking-widest border border-emerald-100/50">
+                            Active
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <a href="{{ url_for('device_detail', device_id=device.id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-400 group-hover:bg-sky-500 group-hover:text-white transition-all text-[9px] font-black uppercase tracking-widest rounded-lg">
+                            <span>View Detail</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

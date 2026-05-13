@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block header_title %}Device Details / {{ device.hostname }}{% endblock %}
+
+{% block content %}
+<!-- Device Header -->
+<div class="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div>
+        <div class="flex items-center gap-4 mb-2">
+            <h1 class="text-4xl font-black text-slate-800 tracking-tight">Device {{ device.hostname }}</h1>
+            <span class="px-4 py-1.5 bg-emerald-50 text-emerald-600 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-2 border border-emerald-100 shadow-sm">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                Terhubung
+            </span>
+        </div>
+        <div class="flex items-center gap-3 text-slate-400 font-bold text-xs uppercase tracking-widest">
+            <span>{{ device.ip_address }}:{{ device.port or 22 }}</span>
+            <span class="text-slate-200">|</span>
+            <span>cisco_ios</span>
+        </div>
+    </div>
+    <div class="flex items-center gap-3">
+        <a href="{{ url_for('dashboard') }}" class="px-6 py-3 bg-white border border-slate-100 text-slate-600 text-xs font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2">
+            <i class="fas fa-chevron-left"></i>
+            Kembali
+        </a>
+        <button class="px-6 py-3 bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
+            <i class="fas fa-arrows-rotate"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+{% if error %}
+<div class="bg-rose-50 border border-rose-100 p-8 rounded-3xl mb-10 flex items-start gap-5">
+    <div class="w-12 h-12 bg-rose-500 text-white rounded-2xl flex items-center justify-center text-xl shrink-0 shadow-lg shadow-rose-200">
+        <i class="fas fa-triangle-exclamation"></i>
+    </div>
+    <div>
+        <h3 class="text-rose-900 font-black text-lg mb-1 tracking-tight">Connection Failed</h3>
+        <p class="text-rose-600/80 text-sm font-medium leading-relaxed">{{ error }}</p>
+        <button onclick="location.reload()" class="mt-4 px-5 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600 transition-all">Try Again</button>
+    </div>
+</div>
+{% else %}
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-10">
+    <!-- SSH Credentials Card -->
+    <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+        <div class="p-8 border-b border-slate-50 flex items-center gap-4">
+            <div class="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center">
+                <i class="fas fa-key"></i>
+            </div>
+            <h3 class="font-black text-slate-800 text-lg tracking-tight">SSH Credentials</h3>
+        </div>
+        <div class="p-8 space-y-6 flex-1">
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Username</label>
+                <input type="text" value="{{ device.username }}" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-0 outline-none" readonly>
+            </div>
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Password <span class="text-rose-500">*</span></label>
+                <div class="relative">
+                    <input type="password" value="********" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-0 outline-none" readonly>
+                    <i class="fas fa-eye absolute right-5 top-1/2 -translate-y-1/2 text-slate-300"></i>
+                </div>
+            </div>
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Enable Secret</label>
+                <input type="text" placeholder="Opsional" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-300 italic focus:ring-0 outline-none" readonly>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interface Configuration Card -->
+    <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <div class="p-8 border-b border-slate-50 flex items-center gap-4">
+            <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                <i class="fas fa-sliders"></i>
+            </div>
+            <h3 class="font-black text-slate-800 text-lg tracking-tight">Konfigurasi Interface</h3>
+        </div>
+        <form action="{{ url_for('configure_ip', device_id=device.id) }}" method="POST" class="p-8 space-y-6">
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Interface</label>
+                    <select name="interface" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer">
+                        {% for interface in interfaces %}
+                        <option value="{{ interface.name }}">{{ interface.name }} | {{ interface.ip }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Action</label>
+                    <select name="action" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer">
+                        <option value="Add IP">Add IP</option>
+                        <option value="Remove IP">Remove IP</option>
+                        <option value="No Shutdown">No Shutdown</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Value (IP/Prefix)</label>
+                <input type="text" name="ip" placeholder="e.g. 192.168.100.100/24" class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                <p class="text-[10px] text-slate-400 font-bold mt-3 uppercase tracking-wider">Tanpa prefix = otomatis /24</p>
+            </div>
+            <div class="pt-4">
+                <button type="submit" class="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-100">
+                    <i class="fas fa-check"></i>
+                    Apply Configuration
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Interface Summary Table -->
+<div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+    <div class="p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+        <div>
+            <h3 class="font-black text-slate-800 text-lg tracking-tight">Interface Summary</h3>
+            <p class="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">Output dari perintah <span class="bg-slate-100 px-2 py-0.5 rounded text-indigo-500">show ip interface brief</span></p>
+        </div>
+        <div class="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 shadow-sm">
+            <i class="fas fa-ellipsis-v"></i>
+        </div>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left">
+            <thead>
+                <tr class="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                    <th class="px-10 py-6">Interface</th>
+                    <th class="px-10 py-6">IP Address</th>
+                    <th class="px-10 py-6">Status</th>
+                    <th class="px-10 py-6">Protocol</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+                {% for interface in interfaces %}
+                <tr class="group hover:bg-slate-50/50 transition-all duration-300">
+                    <td class="px-10 py-6">
+                        <span class="px-3 py-1.5 bg-slate-100 text-slate-700 text-[11px] font-black rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                            {{ interface.name }}
+                        </span>
+                    </td>
+                    <td class="px-10 py-6 text-sm font-bold text-slate-500 font-mono tracking-tight">{{ interface.ip }}</td>
+                    <td class="px-10 py-6">
+                        <span class="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-wider {{ 'text-emerald-500' if interface.status == 'up' else 'text-rose-500' }}">
+                            <span class="w-1.5 h-1.5 rounded-full {{ 'bg-emerald-500' if interface.status == 'up' else 'bg-rose-500' }}"></span>
+                            {{ interface.status }}
+                        </span>
+                    </td>
+                    <td class="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">{{ interface.protocol }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
