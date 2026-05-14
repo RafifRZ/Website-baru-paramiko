@@ -167,17 +167,36 @@ def delete_device(device_id):
 def update_device(device_id):
     device = Device.query.get_or_404(device_id)
     old_hostname = device.hostname
-    device.hostname = request.form.get('hostname')
-    device.ip_address = request.form.get('ip')
-    device.username = request.form.get('username')
-    device.port = int(request.form.get('port') or 22)
+    new_hostname = request.form.get('hostname')
+    new_ip = request.form.get('ip')
+    new_username = request.form.get('username')
+    new_port = int(request.form.get('port') or 22)
     new_password = request.form.get('password')
+    password_to_verify = new_password if new_password else device.password
+
+    duplicate = Device.query.filter(
+        ((Device.ip_address == new_ip) | (Device.hostname == new_hostname)) & (Device.id != device_id)
+    ).first()
+    if duplicate:
+        flash('Router dengan IP atau hostname ini sudah terdaftar pada perangkat lain.')
+        return redirect(url_for('device_detail', device_id=device_id))
+
+    success, msg = check_router_status(new_ip, new_username, password_to_verify, new_port)
+    if not success:
+        flash('Verifikasi gagal: pastikan IP, port, dan kredensial benar sebelum menyimpan perubahan.')
+        return redirect(url_for('device_detail', device_id=device_id))
+
+    device.hostname = new_hostname
+    device.ip_address = new_ip
+    device.username = new_username
+    device.port = new_port
     if new_password:
         device.password = new_password
+    device.status = 'Online'
     db.session.commit()
     log_action(f"Updated device info for {old_hostname} -> {device.hostname}")
     flash(f'Device {device.hostname} updated')
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('device_detail', device_id=device.id))
 
 @app.route('/device/<int:device_id>')
 @login_required
@@ -346,7 +365,8 @@ def system_logs():
 @login_required
 def terminal():
     devices = Device.query.all()
-    return render_template('terminal.html', devices=devices)
+    selected_device_id = request.args.get('device_id', '')
+    return render_template('terminal.html', devices=devices, selected_device_id=selected_device_id)
 
 # --- Terminal (SocketIO) ---
 

@@ -30,14 +30,20 @@
                 <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
                 <span class="ml-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">ssh_session_01.term</span>
             </div>
+            <div class="flex items-center gap-3">
             <div id="connection-status" class="text-[9px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
                 <span id="status-dot" class="w-1.5 h-1.5 bg-slate-700 rounded-full"></span>
                 <span id="status-text">Disconnected</span>
             </div>
+            <button id="terminal-minimize" onclick="toggleTerminal()" class="text-slate-400 hover:text-white text-xs uppercase tracking-widest font-black px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 transition-all">
+                <i class="fas fa-window-minimize"></i>
+            </button>
+        </div>
         </div>
         
-        <!-- Terminal Output Area -->
-        <div id="terminal-output" class="flex-1 p-6 font-mono text-xs text-emerald-400 overflow-y-auto space-y-1 selection:bg-emerald-500/30">
+        <div id="terminal-panel" class="flex-1 flex flex-col">
+            <!-- Terminal Output Area -->
+            <div id="terminal-output" class="flex-1 p-6 font-mono text-xs text-emerald-400 overflow-y-auto space-y-1 selection:bg-emerald-500/30">
             <p class="text-slate-500">ParaMaster Interactive Shell</p>
             <p class="text-slate-500">Type 'help' for available local commands or select a device to begin SSH.</p>
             <p class="pt-2">user@paramaster:~$ <span class="animate-pulse">_</span></p>
@@ -54,6 +60,7 @@
 </div>
 
 <script>
+    const socket = io();
     const outputArea = document.getElementById('terminal-output');
     const inputArea = document.getElementById('terminal-input');
     const deviceSelect = document.getElementById('device-select');
@@ -88,6 +95,14 @@
         statusText.innerText = 'Connecting...';
     }
 
+    function toggleTerminal() {
+        const panel = document.getElementById('terminal-panel');
+        const button = document.getElementById('terminal-minimize');
+        if (!panel) return;
+        panel.classList.toggle('hidden');
+        button.innerHTML = panel.classList.contains('hidden') ? '<i class="fas fa-square-plus"></i>' : '<i class="fas fa-window-minimize"></i>';
+    }
+
     inputArea.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
             const cmd = inputArea.value;
@@ -108,6 +123,15 @@
             appendToTerminal(msg.data);
             statusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
             statusText.innerText = 'Connected';
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const params = new URLSearchParams(window.location.search);
+        const selectedId = params.get('device_id') || '{{ selected_device_id | default('') }}';
+        if (selectedId) {
+            deviceSelect.value = selectedId;
+            connectTerminal();
         }
     });
 </script>

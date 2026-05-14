@@ -13,14 +13,11 @@
         .sidebar { background-color: #0b0e14; height: 100vh; width: 240px; }
         .sidebar-item { color: #94a3b8; transition: all 0.3s; border-left: 4px solid transparent; }
         .sidebar-item:hover, .sidebar-item.active { background-color: #1e293b; color: #38bdf8; border-left: 4px solid #38bdf8; }
-        .bottom-console { background-color: #000000; height: 40px; color: #22c55e; font-family: 'Courier New', monospace; font-size: 12px; }
         .main-container { height: calc(100vh - 40px); overflow: hidden; }
         .content-area { height: calc(100vh - 100px); overflow-y: auto; }
         .table-header { border-bottom: 2px solid #f1f5f9; color: #64748b; text-transform: uppercase; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; }
         .table-row { border-bottom: 1px solid #f8fafc; transition: all 0.2s; }
         .table-row:hover { background-color: #f1f5f9; }
-        .terminal-float { position: fixed; bottom: 24px; right: 24px; z-index: 50; padding: 12px 20px; background: #0ea5e9; border-radius: 9999px; border: none; cursor: pointer; transition: transform 0.2s ease, background 0.2s ease; }
-        .terminal-float:hover { transform: translateY(-2px); background: #0284c7; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
@@ -30,7 +27,7 @@
         <aside class="sidebar flex flex-col shrink-0">
             <div class="p-8">
                 <h1 class="text-white font-black text-xl tracking-tighter italic">PARAMASTER</h1>
-                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">v0.1.0-beta</p>
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">v0.2.0-beta</p>
             </div>
             
             <nav class="flex-1 mt-4">
@@ -97,52 +94,8 @@
         </main>
     </div>
 
-    <footer id="console-bar" class="bottom-console flex items-center justify-between px-6 border-t border-slate-800 transition-all duration-300">
-        <div id="console-content" class="flex items-center gap-4 overflow-hidden">
-            <span class="flex items-center gap-2 whitespace-nowrap">
-                <i class="fas fa-terminal text-[10px]"></i>
-                <span class="text-white/40 uppercase font-bold text-[10px]">Console:</span>
-                <span id="console-status" class="text-white/80">System Ready</span>
-            </span>
-            <span class="text-white/20">|</span>
-            <span id="console-cmd" class="text-white/60 truncate">Waiting for input...</span>
-        </div>
-        <div class="flex items-center gap-6 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">
-            <button onclick="clearConsole()" class="hover:text-white transition-all">Clear</button>
-            <button id="collapse-btn" onclick="toggleConsole()" class="text-sky-500 hover:text-sky-400 transition-all">Collapse</button>
-        </div>
-    </footer>
-
-    <button onclick="openTerminal()" class="terminal-float text-white font-black uppercase tracking-widest shadow-xl shadow-sky-500/20">
-        Terminal
-    </button>
-
     <script>
-        const socket = io();
-        
-        function clearConsole() {
-            document.getElementById('console-status').innerText = 'System Ready';
-            document.getElementById('console-cmd').innerText = 'Waiting for input...';
-        }
-
-        function toggleConsole() {
-            const bar = document.getElementById('console-bar');
-            const content = document.getElementById('console-content');
-            const btn = document.getElementById('collapse-btn');
-            
-            if (bar.style.height === '10px') {
-                bar.style.height = '40px';
-                content.classList.remove('hidden');
-                btn.innerText = 'Collapse';
-            } else {
-                bar.style.height = '10px';
-                content.classList.add('hidden');
-                btn.innerText = 'Expand';
-            }
-        }
-
         function openTerminal() {
-            // Redirect to the first device terminal or a general terminal page
             window.location.href = "/terminal";
         }
     </script>
