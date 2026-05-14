@@ -119,10 +119,14 @@
             appendToTerminal(msg.data, 'error');
             statusDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500';
             statusText.innerText = 'Failed';
+            localStorage.removeItem('activeTerminalDeviceId');
         } else {
             appendToTerminal(msg.data);
-            statusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
-            statusText.innerText = 'Connected';
+            if (statusText.innerText !== 'Connected') {
+                statusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
+                statusText.innerText = 'Connected';
+                localStorage.setItem('activeTerminalDeviceId', deviceSelect.value);
+            }
         }
     });
 
