@@ -10,12 +10,35 @@ class ParamikoUtils:
         self.client = None
 
     def connect(self):
-        """Establish SSH connection to the router."""
+        """Establish SSH connection to the router.
+
+        The original implementation used the default Paramiko behaviour which
+        attempts to load SSH keys from the local environment. In many lab
+        setups the router only accepts password authentication, causing the
+        connection to fail quickly with an ``AuthenticationException`` that is
+        not informative for the user. We now explicitly disable key lookup and
+        increase the timeout to 20 seconds to accommodate slower devices.
+        The method returns a tuple ``(success, message)`` where ``message``
+        contains a human‑readable description of the failure.
+        """
         try:
             self.client = paramiko.SSHClient()
             self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.client.connect(self.ip, port=self.port, username=self.username, password=self.password, timeout=10)
+            # Disable automatic key loading; rely solely on password auth.
+            self.client.connect(
+                self.ip,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                timeout=20,
+                look_for_keys=False,
+                allow_agent=False,
+            )
             return True, "Connected successfully"
+        except paramiko.AuthenticationException:
+            return False, "Authentication failed – check username/password"
+        except paramiko.SSHException as e:
+            return False, f"SSH error: {e}"
         except Exception as e:
             return False, str(e)
 
