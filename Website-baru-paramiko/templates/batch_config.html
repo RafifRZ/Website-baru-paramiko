@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block header_title %}Batch Actions{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header Section -->
+    <div class="mb-10">
+        <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">Batch Configuration</h1>
+        <p class="text-slate-400 mt-2 font-medium">Execute configurations across multiple nodes simultaneously using CSV or raw CLI commands.</p>
+    </div>
+
+    <!-- Device Selection Section -->
+    <div class="mb-10">
+        <div class="flex items-center gap-2 mb-6">
+            <i class="fas fa-server text-slate-300"></i>
+            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Target Nodes Selection</h4>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {% for device in devices %}
+            <label class="group cursor-pointer">
+                <input type="checkbox" name="devices" value="{{ device.id }}" class="hidden peer">
+                <div class="px-5 py-4 bg-white border border-slate-100 rounded-2xl text-center transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:ring-2 peer-checked:ring-indigo-100 group-hover:border-slate-200 shadow-sm">
+                    <p class="text-xs font-black text-slate-700 peer-checked:text-indigo-600">{{ device.hostname }}</p>
+                    <p class="text-[9px] font-bold text-slate-400 mt-1 uppercase">{{ device.ip_address }}</p>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <!-- Tabs Header -->
+        <div class="px-10 py-6 border-b border-slate-50 flex items-center gap-8">
+            <button id="tab-csv" onclick="switchTab('csv')" class="tab-btn pb-4 border-b-2 border-indigo-600 text-indigo-600 text-sm font-black uppercase tracking-widest focus:outline-none transition-all">
+                CSV Mode
+            </button>
+            <button id="tab-raw" onclick="switchTab('raw')" class="tab-btn pb-4 border-b-2 border-transparent text-slate-400 text-sm font-black uppercase tracking-widest hover:text-slate-600 transition-all focus:outline-none transition-all">
+                Raw CLI Mode
+            </button>
+        </div>
+
+        <form action="{{ url_for('batch_config') }}" method="POST" enctype="multipart/form-data" class="p-10 space-y-10">
+            <!-- Alert Info -->
+            <div class="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-4">
+                <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                    <i class="fas fa-bolt"></i>
+                </div>
+                <div>
+                    <h4 class="text-sm font-black text-slate-800 tracking-tight">Konfigurasi Batch</h4>
+                    <p id="mode-desc" class="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">Format: <span class="bg-white px-2 py-0.5 rounded text-indigo-500">device1;device2, interface, action, value</span></p>
+                </div>
+            </div>
+
+            <!-- CSV Input Section -->
+            <div id="section-csv" class="space-y-10">
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-caret-down text-slate-300"></i>
+                            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Upload CSV File</h4>
+                        </div>
+                    </div>
+                    <div class="p-8 bg-slate-50 border border-slate-100 rounded-[2rem] border-dashed text-center">
+                        <input type="file" name="csv_file" class="hidden" id="csv-file-input" onchange="updateFileName(this)">
+                        <label for="csv-file-input" class="cursor-pointer group">
+                            <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-500 shadow-sm group-hover:scale-110 transition-all">
+                                <i class="fas fa-cloud-upload-alt text-2xl"></i>
+                            </div>
+                            <p id="file-name" class="text-sm font-black text-slate-700 tracking-tight">Klik untuk pilih file CSV</p>
+                            <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase">Maksimal 10MB</p>
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mt-8">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-keyboard text-slate-300"></i>
+                            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Atau Paste Manual (CSV Format)</h4>
+                        </div>
+                    </div>
+                    <div class="relative group">
+                        <textarea name="config_text" rows="5" class="w-full p-8 bg-slate-50 border border-slate-100 rounded-[2rem] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-inner placeholder:text-slate-300" placeholder="R1, Gi0/1, add, 10.1.1.1/24&#10;R2, Gi0/1, add, 10.1.1.2/24"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Raw CLI Section (Hidden by default) -->
+            <div id="section-raw" class="hidden space-y-10">
+                <div class="space-y-6">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-caret-down text-slate-300"></i>
+                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Raw Cisco Commands</h4>
+                    </div>
+                    <div class="relative group">
+                        <textarea name="raw_commands" rows="8" class="w-full p-8 bg-slate-900 text-emerald-400 font-mono text-sm rounded-[2rem] border-none focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-2xl" placeholder="interface GigabitEthernet0/1&#10; ip address 10.1.1.1 255.255.255.0&#10; no shutdown"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-4 border-t border-slate-50">
+                <button type="submit" class="px-10 py-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-200 flex items-center gap-3 group">
+                    <i class="fas fa-play text-xs group-hover:translate-x-1 transition-transform"></i>
+                    Execute Batch
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function updateFileName(input) {
+        const fileName = input.files[0] ? input.files[0].name : "Klik untuk pilih file CSV";
+        document.getElementById('file-name').innerText = fileName;
+        document.getElementById('file-name').classList.add('text-indigo-600');
+    }
+
+    function switchTab(mode) {
+        const csvBtn = document.getElementById('tab-csv');
+        const rawBtn = document.getElementById('tab-raw');
+        const csvSec = document.getElementById('section-csv');
+        const rawSec = document.getElementById('section-raw');
+        const desc = document.getElementById('mode-desc');
+
+        if (mode === 'csv') {
+            csvBtn.classList.add('border-indigo-600', 'text-indigo-600');
+            csvBtn.classList.remove('border-transparent', 'text-slate-400');
+            rawBtn.classList.remove('border-indigo-600', 'text-indigo-600');
+            rawBtn.classList.add('border-transparent', 'text-slate-400');
+            csvSec.classList.remove('hidden');
+            rawSec.classList.add('hidden');
+            desc.innerHTML = 'Format: <span class="bg-white px-2 py-0.5 rounded text-indigo-500">device, interface, action, value</span>';
+        } else {
+            rawBtn.classList.add('border-indigo-600', 'text-indigo-600');
+            rawBtn.classList.remove('border-transparent', 'text-slate-400');
+            csvBtn.classList.remove('border-indigo-600', 'text-indigo-600');
+            csvBtn.classList.add('border-transparent', 'text-slate-400');
+            rawSec.classList.remove('hidden');
+            csvSec.classList.add('hidden');
+            desc.innerHTML = 'Execute raw Cisco IOS commands directly on selected devices.';
+        }
+    }
+</script>
+{% endblock %}

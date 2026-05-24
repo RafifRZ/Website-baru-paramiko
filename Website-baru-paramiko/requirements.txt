@@ -1,0 +1,10 @@
+flask
+flask-sqlalchemy
+flask-login
+flask-socketio
+paramiko
+netmiko
+python-dotenv
+eventlet
+pandas
+pytz
