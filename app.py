@@ -452,6 +452,14 @@ def handle_disconnect():
         close_terminal_shell(active_shells[sid]['client'], active_shells[sid]['shell'])
         del active_shells[sid]
 
+# Handle explicit disconnect request from client UI
+@socketio.on('disconnect_terminal')
+def handle_disconnect_terminal():
+    sid = request.sid
+    if sid in active_shells:
+        close_terminal_shell(active_shells[sid]['client'], active_shells[sid]['shell'])
+        del active_shells[sid]
+
 # --- Init Database ---
 
 @app.cli.command("init-db")

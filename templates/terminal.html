@@ -35,6 +35,9 @@
                 <span id="status-dot" class="w-1.5 h-1.5 bg-slate-700 rounded-full"></span>
                 <span id="status-text">Disconnected</span>
             </div>
+            <button id="terminal-disconnect" onclick="disconnectTerminal()" class="hidden text-red-400 hover:text-red-200 text-xs uppercase tracking-widest font-black px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 transition-all">
+                Disconnect
+            </button>
             <button id="terminal-minimize" onclick="toggleTerminal()" class="text-slate-400 hover:text-white text-xs uppercase tracking-widest font-black px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 transition-all">
                 <i class="fas fa-window-minimize"></i>
             </button>
@@ -66,6 +69,8 @@
     const deviceSelect = document.getElementById('device-select');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
+    // Scroll lock flag – true when user has manually scrolled away from bottom
+    let autoScroll = true;
 
     function appendToTerminal(text, type = 'output') {
         const p = document.createElement('p');
@@ -78,7 +83,10 @@
             p.innerHTML = text.replace(/\n/g, '<br>');
         }
         outputArea.appendChild(p);
-        outputArea.scrollTop = outputArea.scrollHeight;
+        // Auto‑scroll only when the user is already at the bottom
+        if (autoScroll) {
+            outputArea.scrollTop = outputArea.scrollHeight;
+        }
     }
 
     function connectTerminal() {
@@ -86,6 +94,12 @@
         if (!deviceId) {
             appendToTerminal('Please select a device first.', 'error');
             return;
+        }
+
+        // Make sure the terminal panel is visible before establishing connection
+        const panel = document.getElementById('terminal-panel');
+        if (panel && panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
         }
 
         appendToTerminal(`Connecting to node [ID:${deviceId}]...`);
@@ -102,6 +116,13 @@
         panel.classList.toggle('hidden');
         button.innerHTML = panel.classList.contains('hidden') ? '<i class="fas fa-square-plus"></i>' : '<i class="fas fa-window-minimize"></i>';
     }
+
+    // Detect manual scrolling to enable/disable auto‑scroll
+    outputArea.addEventListener('scroll', function () {
+        const threshold = 20; // pixels from bottom considered "at bottom"
+        const atBottom = outputArea.scrollHeight - outputArea.scrollTop - outputArea.clientHeight < threshold;
+        autoScroll = atBottom;
+    });
 
     inputArea.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
@@ -120,19 +141,54 @@
             statusDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500';
             statusText.innerText = 'Failed';
             localStorage.removeItem('activeTerminalDeviceId');
+            // hide disconnect button on failure
+            document.getElementById('terminal-disconnect').classList.add('hidden');
         } else {
             appendToTerminal(msg.data);
             if (statusText.innerText !== 'Connected') {
                 statusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
                 statusText.innerText = 'Connected';
                 localStorage.setItem('activeTerminalDeviceId', deviceSelect.value);
+                // show disconnect button when connected
+                document.getElementById('terminal-disconnect').classList.remove('hidden');
+                // show restore button across pages
+                const restoreBtn = document.getElementById('terminal-restore');
+                if (restoreBtn) restoreBtn.style.display = 'inline-flex';
             }
         }
     });
 
+    // Disconnect function – clears UI and notifies server
+    function disconnectTerminal() {
+        socket.emit('disconnect_terminal');
+        statusDot.className = 'w-1.5 h-1.5 rounded-full bg-slate-700';
+        statusText.innerText = 'Disconnected';
+        localStorage.removeItem('activeTerminalDeviceId');
+        // Hide disconnect button
+        document.getElementById('terminal-disconnect').classList.add('hidden');
+        // Hide terminal restore button across pages
+        const restoreBtn = document.getElementById('terminal-restore');
+        if (restoreBtn) restoreBtn.style.display = 'none';
+        // Hide terminal panel to reflect inactive state
+        const panel = document.getElementById('terminal-panel');
+        if (panel && !panel.classList.contains('hidden')) {
+            panel.classList.add('hidden');
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        // Ensure UI starts in a clean state
+        const disconnectBtn = document.getElementById('terminal-disconnect');
+        const restoreBtn = document.getElementById('terminal-restore');
+        if (disconnectBtn) disconnectBtn.classList.add('hidden');
+        if (restoreBtn) restoreBtn.style.display = 'none';
+        // If a session is stored, show the disconnect button
+        if (localStorage.getItem('activeTerminalDeviceId') && disconnectBtn) {
+            disconnectBtn.classList.remove('hidden');
+        }
+
         const params = new URLSearchParams(window.location.search);
-        const selectedId = params.get('device_id') || '{{ selected_device_id | default('') }}';
+        const selectedId = params.get('device_id') || "{{ selected_device_id | default('') }}";
         if (selectedId) {
             deviceSelect.value = selectedId;
             connectTerminal();

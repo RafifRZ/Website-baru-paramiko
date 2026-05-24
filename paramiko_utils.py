@@ -112,7 +112,7 @@ class ParamikoUtils:
             ]
             for cmd in commands:
                 shell.send(cmd)
-                time.sleep(1)
+                time.sleep(2)
             shell.close()
             return True, "IP address added successfully"
         except Exception as e:
