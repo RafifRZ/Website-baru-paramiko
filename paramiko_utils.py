@@ -120,7 +120,7 @@ class ParamikoUtils:
         finally:
             self.disconnect()
 
-    def remove_ip_address(self, interface, ip_addr):
+    def remove_ip_address(self, interface, ip_addr=None):
         """Remove IP address from an interface."""
         success, msg = self.connect()
         if not success:
@@ -128,10 +128,11 @@ class ParamikoUtils:
 
         try:
             shell = self.client.invoke_shell()
+            ip_cmd = f'no ip address {ip_addr}\n' if ip_addr else 'no ip address\n'
             commands = [
                 f'configure terminal\n',
                 f'interface {interface}\n',
-                f'no ip address {ip_addr}\n',
+                ip_cmd,
                 'end\n',
                 'write memory\n'
             ]
@@ -142,6 +143,83 @@ class ParamikoUtils:
             return True, "IP address removed successfully"
         except Exception as e:
             return False, str(e)
+        finally:
+            self.disconnect()
+
+    def no_shutdown_interface(self, interface):
+        """Enable an interface (no shutdown)."""
+        success, msg = self.connect()
+        if not success:
+            return False, msg
+
+        try:
+            shell = self.client.invoke_shell()
+            commands = [
+                f'configure terminal\n',
+                f'interface {interface}\n',
+                'no shutdown\n',
+                'end\n',
+                'write memory\n'
+            ]
+            for cmd in commands:
+                shell.send(cmd)
+                time.sleep(1)
+            shell.close()
+            return True, "Interface enabled successfully"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            self.disconnect()
+
+    def get_hostname(self):
+        """Retrieve the hostname from the router by parsing CLI prompt or running show running-config."""
+        success, msg = self.connect()
+        if not success:
+            return None, msg
+
+        try:
+            # Method 1: Try reading the prompt from an interactive shell
+            shell = self.client.invoke_shell()
+            time.sleep(1)  # Wait for connection banner/motd
+            # Clear buffer
+            if shell.recv_ready():
+                shell.recv(65535)
+
+            # Send newline to trigger prompt
+            shell.send('\n')
+            time.sleep(1)
+            output = ''
+            while shell.recv_ready():
+                output += shell.recv(1024).decode('utf-8', errors='ignore')
+
+            import re
+            lines = [line.strip() for line in output.splitlines() if line.strip()]
+            if lines:
+                last_line = lines[-1]
+                # Match hostname before '#' or '>' (e.g. R1# or R1>)
+                match = re.search(r'([A-Za-z0-9\-_]+)(?:\([^)]+\))?[#>]', last_line)
+                if match:
+                    shell.close()
+                    return match.group(1), None
+
+            # Fallback Method 2: Try running 'show running-config | include hostname'
+            shell.send('show running-config | include hostname\n')
+            time.sleep(1.5)
+            output = ''
+            while shell.recv_ready():
+                output += shell.recv(1024).decode('utf-8', errors='ignore')
+            shell.close()
+
+            for line in output.splitlines():
+                line = line.strip()
+                if line.startswith('hostname '):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        return parts[1], None
+
+            return None, "Gagal mencocokkan prompt CLI maupun hostname konfigurasi."
+        except Exception as e:
+            return None, str(e)
         finally:
             self.disconnect()
 
@@ -161,7 +239,17 @@ def add_ip_address(ip, username, password, port=22, interface='', ip_addr='', ma
     utils = ParamikoUtils(ip, username, password, port)
     return utils.add_ip_address(interface, ip_addr, mask)
 
-def remove_ip_address(ip, username, password, port=22, interface='', ip_addr=''):
+def remove_ip_address(ip, username, password, port=22, interface='', ip_addr=None):
     """Remove IP address from interface."""
     utils = ParamikoUtils(ip, username, password, port)
     return utils.remove_ip_address(interface, ip_addr)
+
+def no_shutdown_interface(ip, username, password, port=22, interface=''):
+    """Enable interface."""
+    utils = ParamikoUtils(ip, username, password, port)
+    return utils.no_shutdown_interface(interface)
+
+def get_device_hostname(ip, username, password, port=22):
+    """Retrieve the hostname from a router."""
+    utils = ParamikoUtils(ip, username, password, port)
+    return utils.get_hostname()

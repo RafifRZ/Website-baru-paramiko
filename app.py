@@ -5,7 +5,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Device, Log
-from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address
+from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address, no_shutdown_interface, get_device_hostname
 from ssh_utils import run_batch_config
 from terminal_utils import connect_terminal_shell, read_shell_output, send_shell_command, close_terminal_shell
 import pandas as pd
@@ -121,9 +121,9 @@ def verify_device():
 @app.route('/devices/add', methods=['POST'])
 @login_required
 def add_device():
-    hostname = request.form.get('hostname')
-    ip = request.form.get('ip')
-    username = request.form.get('username')
+    hostname = request.form.get('hostname', '').strip()
+    ip = request.form.get('ip', '').strip()
+    username = request.form.get('username', '').strip()
     password = request.form.get('password')
     port = request.form.get('port') or 22
     try:
@@ -131,15 +131,38 @@ def add_device():
     except ValueError:
         port = 22
 
-    existing = Device.query.filter((Device.ip_address == ip) | (Device.hostname == hostname)).first()
-    if existing:
-        flash('Router dengan IP atau hostname ini sudah terdaftar.')
-        return redirect(url_for('dashboard'))
+    # Check duplicate IP/Hostname in the database first
+    if hostname:
+        existing = Device.query.filter((Device.ip_address == ip) | (Device.hostname == hostname)).first()
+        if existing:
+            flash('Router dengan IP atau hostname ini sudah terdaftar.')
+            return redirect(url_for('dashboard'))
+    else:
+        existing = Device.query.filter(Device.ip_address == ip).first()
+        if existing:
+            flash('Router dengan IP ini sudah terdaftar.')
+            return redirect(url_for('dashboard'))
 
-    success, msg = check_router_status(ip, username, password, port)
-    if not success:
-        flash('Router tidak dapat terhubung. Pastikan IP, port, dan kredensial benar.')
-        return redirect(url_for('dashboard'))
+    # If hostname is not provided, fetch it from device
+    if not hostname:
+        resolved_hostname, msg = get_device_hostname(ip, username, password, port)
+        if not resolved_hostname:
+            flash(f'Router tidak dapat terhubung atau gagal mengambil hostname otomatis: {msg}')
+            return redirect(url_for('dashboard'))
+        
+        # Verify the resolved hostname is not a duplicate in DB
+        existing_hostname = Device.query.filter_by(hostname=resolved_hostname).first()
+        if existing_hostname:
+            flash(f'Router dengan hostname "{resolved_hostname}" sudah terdaftar.')
+            return redirect(url_for('dashboard'))
+            
+        hostname = resolved_hostname
+    else:
+        # Otherwise, just verify the status using the provided credentials
+        success, msg = check_router_status(ip, username, password, port)
+        if not success:
+            flash(f'Router tidak dapat terhubung. Pastikan IP, port, dan kredensial benar: {msg}')
+            return redirect(url_for('dashboard'))
 
     new_device = Device(hostname=hostname, ip_address=ip, username=username, password=password, port=port, status='Online')
     db.session.add(new_device)
@@ -254,11 +277,9 @@ def configure_ip(device_id):
         
         success, msg = add_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip, mask)
     elif action == 'Remove IP':
-        if not ip_raw:
-            flash('Masukkan IP address sebelum menghapus IP.')
-            return redirect(url_for('device_detail', device_id=device_id))
-        
-        success, msg = remove_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip_raw)
+        success, msg = remove_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface)
+    elif action == 'No Shutdown':
+        success, msg = no_shutdown_interface(device.ip_address, device.username, device.password, device.port or 22, interface)
     else:
         flash('Action tidak valid.')
         return redirect(url_for('device_detail', device_id=device_id))

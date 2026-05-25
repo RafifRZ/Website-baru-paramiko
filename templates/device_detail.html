@@ -178,11 +178,11 @@
 
         if (!action || !ipInput || !hint) return;
 
-        if (action.value === 'Remove IP') {
+        if (action.value === 'Remove IP' || action.value === 'No Shutdown') {
             ipInput.value = '';
             ipInput.disabled = true;
-            ipInput.placeholder = 'Not required for Remove IP';
-            hint.innerText = 'Value hanya diperlukan untuk Add IP.';
+            ipInput.placeholder = action.value === 'Remove IP' ? 'Not required for Remove IP' : 'Not required for No Shutdown';
+            hint.innerText = `Value tidak diperlukan untuk ${action.value}.`;
         } else {
             ipInput.disabled = false;
             ipInput.placeholder = 'e.g. 192.168.100.100/24';
