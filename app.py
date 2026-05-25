@@ -394,8 +394,51 @@ def delete_user(user_id):
 @app.route('/interfaces')
 @login_required
 def all_interfaces():
+    import concurrent.futures
     devices = Device.query.all()
-    return render_template('interfaces.html', devices=devices)
+    
+    def fetch_device_data(device):
+        device_id = device.id
+        hostname = device.hostname
+        ip_address = device.ip_address
+        username = device.username
+        password = device.password
+        port = device.port or 22
+        status = device.status
+        
+        interfaces = []
+        if status == 'Online':
+            interfaces = get_interfaces(ip_address, username, password, port)
+        return {
+            'device_id': device_id,
+            'hostname': hostname,
+            'ip_address': ip_address,
+            'status': status,
+            'interfaces': interfaces,
+            'online': status == 'Online'
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(fetch_device_data, d): d for d in devices}
+        results_map = {}
+        for future in concurrent.futures.as_completed(futures):
+            d = futures[future]
+            try:
+                data = future.result()
+                results_map[d.id] = data
+            except Exception as e:
+                results_map[d.id] = {
+                    'device_id': d.id,
+                    'hostname': d.hostname,
+                    'ip_address': d.ip_address,
+                    'status': d.status,
+                    'interfaces': [],
+                    'online': False,
+                    'error': str(e)
+                }
+
+    devices_interfaces = [results_map[d.id] for d in devices if d.id in results_map]
+    return render_template('interfaces.html', devices_interfaces=devices_interfaces)
 
 @app.route('/logs')
 @login_required

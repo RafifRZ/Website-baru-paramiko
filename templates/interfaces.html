@@ -3,49 +3,115 @@
 {% block content %}
 <div class="px-10 py-6">
     <div class="flex items-center justify-between mb-8">
-        <h3 class="text-lg font-black text-slate-800 tracking-tight">Global Interface Inventory</h3>
-        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregated from {{ devices|length }} active nodes</p>
+        <div>
+            <h3 class="text-lg font-black text-slate-800 tracking-tight">Global Interface Inventory</h3>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Aggregated from {{ devices_interfaces|length }} active nodes</p>
+        </div>
+        <a href="{{ url_for('all_interfaces') }}" class="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-100 text-slate-400 text-[11px] font-black uppercase tracking-widest rounded-xl hover:text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
+            <i class="fas fa-rotate text-[10px]"></i>
+            Refresh Interfaces
+        </a>
     </div>
 
-    <div class="bg-white rounded-lg overflow-hidden border border-slate-100">
-        <table class="w-full text-left border-collapse">
-            <thead>
-                <tr class="table-header bg-white">
-                    <th class="px-6 py-4">Node Hostname</th>
-                    <th class="px-6 py-4">Interface Name</th>
-                    <th class="px-6 py-4">IP Address</th>
-                    <th class="px-6 py-4">Status</th>
-                    <th class="px-6 py-4 text-right">Context</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for device in devices %}
-                <tr class="table-row group cursor-pointer hover:bg-slate-50/50 transition-all" onclick="window.location.href='{{ url_for('device_detail', device_id=device.id) }}'">
-                    <td class="px-6 py-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center text-[10px]">
-                                <i class="fas fa-server"></i>
+    {% for node in devices_interfaces %}
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm mb-8 overflow-hidden">
+        <!-- Card Header -->
+        <div class="px-8 py-5 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-white border border-slate-100 text-slate-400 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-server text-sm"></i>
+                </div>
+                <div>
+                    <h4 class="text-sm font-black text-slate-800">{{ node.hostname }}</h4>
+                    <p class="text-[10px] font-bold text-slate-400 font-mono mt-0.5">{{ node.ip_address }}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                {% if node.online %}
+                <span class="text-[9px] font-black text-emerald-500 bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1.5">
+                    <span class="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></span>
+                    Online
+                </span>
+                {% else %}
+                <span class="text-[9px] font-black text-rose-500 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1.5">
+                    <span class="w-1 h-1 bg-rose-500 rounded-full"></span>
+                    Offline
+                </span>
+                {% endif %}
+                <a href="{{ url_for('device_detail', device_id=node.device_id) }}" class="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-100 hover:bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all shadow-sm">
+                    <span>Manage</span>
+                    <i class="fas fa-arrow-right text-[8px]"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- Card Body: Interfaces Table -->
+        <div class="p-6">
+            {% if node.online and node.interfaces %}
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                        <th class="pb-3 pl-4">Interface Name</th>
+                        <th class="pb-3">IP Address</th>
+                        <th class="pb-3 text-right pr-4">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for interface in node.interfaces %}
+                    <tr class="hover:bg-slate-50/50 transition-all border-b border-slate-50 last:border-0 text-xs">
+                        <td class="py-4 pl-4 font-bold text-slate-700">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-network-wired text-slate-300"></i>
+                                {{ interface.name }}
                             </div>
-                            <span class="text-xs font-black text-slate-800">{{ device.hostname }}</span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 text-xs text-slate-500 font-bold">FastEthernet0/0</td>
-                    <td class="px-6 py-4 text-xs text-sky-500 font-mono font-bold">{{ device.ip_address }}</td>
-                    <td class="px-6 py-4">
-                        <span class="px-3 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase rounded-full tracking-widest border border-emerald-100/50">
-                            Active
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 text-right">
-                        <a href="{{ url_for('device_detail', device_id=device.id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-400 group-hover:bg-sky-500 group-hover:text-white transition-all text-[9px] font-black uppercase tracking-widest rounded-lg">
-                            <span>View Detail</span>
-                            <i class="fas fa-arrow-right"></i>
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        </td>
+                        <td class="py-4 font-mono font-bold text-slate-500">
+                            {% if interface.ip %}
+                            <span class="text-sky-500">{{ interface.ip }}</span>
+                            {% else %}
+                            <span class="text-slate-300 italic">unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 text-right pr-4">
+                            {% if 'up/up' in interface.status.lower() or 'up/up' == interface.status %}
+                            <span class="px-2.5 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase rounded-md tracking-wider border border-emerald-100/50">
+                                {{ interface.status }}
+                            </span>
+                            {% elif 'down' in interface.status.lower() %}
+                            <span class="px-2.5 py-1 bg-rose-50 text-rose-600 text-[9px] font-black uppercase rounded-md tracking-wider border border-rose-100/50">
+                                {{ interface.status }}
+                            </span>
+                            {% else %}
+                            <span class="px-2.5 py-1 bg-slate-50 text-slate-600 text-[9px] font-black uppercase rounded-md tracking-wider border border-slate-100/50">
+                                {{ interface.status }}
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% elif not node.online %}
+            <div class="flex flex-col items-center justify-center py-10 text-slate-400">
+                <i class="fas fa-exclamation-triangle text-2xl mb-2 text-slate-300"></i>
+                <span class="text-xs font-bold">Cannot retrieve interfaces: Router is Offline</span>
+            </div>
+            {% else %}
+            <div class="flex flex-col items-center justify-center py-10 text-slate-400">
+                <i class="fas fa-circle-notch text-2xl mb-2 text-slate-300"></i>
+                <span class="text-xs font-bold">No interfaces found on this device</span>
+            </div>
+            {% endif %}
+        </div>
     </div>
+    {% else %}
+    <div class="bg-white rounded-xl border border-slate-100 p-16 flex flex-col items-center justify-center text-center">
+        <div class="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
+            <i class="fas fa-network-wired text-xl"></i>
+        </div>
+        <h4 class="text-sm font-black text-slate-800 uppercase tracking-wider mb-2">No Devices Registered</h4>
+        <p class="text-xs font-bold text-slate-400 max-w-xs">Please add Cisco router devices from the dashboard first to view their interfaces.</p>
+    </div>
+    {% endfor %}
 </div>
 {% endblock %}
