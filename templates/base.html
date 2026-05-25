@@ -1,27 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ParaMaster - Network Automation</title>
+    <title>ParaMaster - Network Config Tools</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fcfdfe; }
-        .sidebar { background-color: #0b0e14; height: 100vh; width: 240px; }
-        .sidebar-item { color: #94a3b8; transition: all 0.3s; border-left: 4px solid transparent; }
-        .sidebar-item:hover, .sidebar-item.active { background-color: #1e293b; color: #38bdf8; border-left: 4px solid #38bdf8; }
-        .main-container { height: calc(100vh - 40px); overflow: hidden; }
-        .content-area { height: calc(100vh - 100px); overflow-y: auto; }
-        .table-header { border-bottom: 2px solid #f1f5f9; color: #64748b; text-transform: uppercase; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; }
-        .table-row { border-bottom: 1px solid #f8fafc; transition: all 0.2s; }
-        .table-row:hover { background-color: #f1f5f9; }
-        .terminal-restore { position: fixed; bottom: 24px; right: 24px; z-index: 60; padding: 14px 18px; background: #0ea5e9; color: white; border-radius: 9999px; border: none; cursor: pointer; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; display: none; box-shadow: 0 22px 45px rgba(14, 165, 233, 0.22); }
-        .terminal-restore:hover { background: #0284c7; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #fcfdfe;
+        }
+
+        .sidebar {
+            background-color: #0b0e14;
+            height: 100vh;
+            width: 240px;
+        }
+
+        .sidebar-item {
+            color: #94a3b8;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+
+        .sidebar-item:hover,
+        .sidebar-item.active {
+            background-color: #1e293b;
+            color: #38bdf8;
+            border-left: 4px solid #38bdf8;
+        }
+
+        .main-container {
+            height: calc(100vh - 40px);
+            overflow: hidden;
+        }
+
+        .content-area {
+            height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        .table-header {
+            border-bottom: 2px solid #f1f5f9;
+            color: #64748b;
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+        }
+
+        .table-row {
+            border-bottom: 1px solid #f8fafc;
+            transition: all 0.2s;
+        }
+
+        .table-row:hover {
+            background-color: #f1f5f9;
+        }
+
+        .terminal-restore {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 60;
+            padding: 14px 18px;
+            background: #0ea5e9;
+            color: white;
+            border-radius: 9999px;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            display: none;
+            box-shadow: 0 22px 45px rgba(14, 165, 233, 0.22);
+        }
+
+        .terminal-restore:hover {
+            background: #0284c7;
+        }
     </style>
 </head>
+
 <body class="flex flex-col h-screen overflow-hidden">
 
     <div class="flex flex-1 main-container">
@@ -29,34 +94,40 @@
         <aside class="sidebar flex flex-col shrink-0">
             <div class="p-8">
                 <h1 class="text-white font-black text-xl tracking-tighter italic">PARAMASTER</h1>
-                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">v0.2.0-beta</p>
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">v0.4.5-beta</p>
             </div>
-            
+
             <nav class="flex-1 mt-4">
-                <a href="{{ url_for('dashboard') }}" class="sidebar-item {{ 'active' if request.endpoint == 'dashboard' }} flex items-center gap-4 px-8 py-4">
+                <a href="{{ url_for('dashboard') }}"
+                    class="sidebar-item {{ 'active' if request.endpoint == 'dashboard' }} flex items-center gap-4 px-8 py-4">
                     <i class="fas fa-tower-broadcast w-5"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Connect</span>
+                    <span class="text-xs font-bold uppercase tracking-widest">devices</span>
                 </a>
-                <a href="{{ url_for('all_interfaces') }}" class="sidebar-item {{ 'active' if request.endpoint == 'all_interfaces' }} flex items-center gap-4 px-8 py-4">
+                <a href="{{ url_for('all_interfaces') }}"
+                    class="sidebar-item {{ 'active' if request.endpoint == 'all_interfaces' }} flex items-center gap-4 px-8 py-4">
                     <i class="fas fa-network-wired w-5"></i>
                     <span class="text-xs font-bold uppercase tracking-widest">Interfaces</span>
                 </a>
-                <a href="{{ url_for('batch_config') }}" class="sidebar-item {{ 'active' if request.endpoint == 'batch_config' }} flex items-center gap-4 px-8 py-4">
+                <a href="{{ url_for('batch_config') }}"
+                    class="sidebar-item {{ 'active' if request.endpoint == 'batch_config' }} flex items-center gap-4 px-8 py-4">
                     <i class="fas fa-microchip w-5"></i>
                     <span class="text-xs font-bold uppercase tracking-widest">Bulk Action</span>
                 </a>
-                <a href="{{ url_for('users') }}" class="sidebar-item {{ 'active' if request.endpoint == 'users' }} flex items-center gap-4 px-8 py-4">
+                <a href="{{ url_for('users') }}"
+                    class="sidebar-item {{ 'active' if request.endpoint == 'users' }} flex items-center gap-4 px-8 py-4">
                     <i class="fas fa-users w-5"></i>
                     <span class="text-xs font-bold uppercase tracking-widest">Users</span>
                 </a>
-                <a href="{{ url_for('system_logs') }}" class="sidebar-item {{ 'active' if request.endpoint == 'system_logs' }} flex items-center gap-4 px-8 py-4">
+                <a href="{{ url_for('system_logs') }}"
+                    class="sidebar-item {{ 'active' if request.endpoint == 'system_logs' }} flex items-center gap-4 px-8 py-4">
                     <i class="fas fa-terminal w-5"></i>
                     <span class="text-xs font-bold uppercase tracking-widest">System Logs</span>
                 </a>
             </nav>
 
             <div class="p-8">
-                <a href="{{ url_for('logout') }}" class="text-slate-500 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest flex items-center gap-3">
+                <a href="{{ url_for('logout') }}"
+                    class="text-slate-500 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest flex items-center gap-3">
                     <i class="fas fa-power-off"></i>
                     Logout
                 </a>
@@ -73,24 +144,26 @@
                 </div>
                 <h2 class="text-lg font-black text-slate-800 tracking-tight italic">ParaMaster</h2>
                 <div class="flex items-center gap-6">
-                    <i class="fas fa-search text-slate-400 cursor-pointer hover:text-slate-600 transition-all text-sm"></i>
-                    <a href="{{ url_for('logout') }}" class="text-sky-500 text-xs font-black uppercase tracking-widest hover:underline">Logout</a>
+<input type="text" id="global-search" placeholder="Search devices..." class="px-4 py-2 bg-slate-50 border border-slate-100 rounded text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none" list="device-options">
+                    <a href="{{ url_for('logout') }}"
+                        class="text-sky-500 text-xs font-black uppercase tracking-widest hover:underline">Logout</a>
                 </div>
             </header>
 
             <!-- Scrollable Content -->
             <div class="content-area">
                 {% with messages = get_flashed_messages() %}
-                  {% if messages %}
-                    {% for message in messages %}
-                      <div class="m-8 p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold rounded-lg flex items-center gap-3">
-                        <i class="fas fa-check-circle"></i>
-                        {{ message }}
-                      </div>
-                    {% endfor %}
-                  {% endif %}
+                {% if messages %}
+                {% for message in messages %}
+                <div
+                    class="m-8 p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold rounded-lg flex items-center gap-3">
+                    <i class="fas fa-check-circle"></i>
+                    {{ message }}
+                </div>
+                {% endfor %}
+                {% endif %}
                 {% endwith %}
-                
+
                 {% block content %}{% endblock %}
             </div>
         </main>
@@ -123,4 +196,5 @@
         document.addEventListener('DOMContentLoaded', refreshTerminalRestore);
     </script>
 </body>
+
 </html>

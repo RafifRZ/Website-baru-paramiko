@@ -87,6 +87,9 @@ def dashboard():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # If user is already logged in, redirect to main dashboard
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
