@@ -22,7 +22,7 @@
 
     <!-- Terminal Container -->
     <!-- Limit the terminal panel height to avoid page scrolling and keep the input fixed at the bottom -->
-    <div class="flex-1 bg-black rounded-2xl shadow-2xl overflow-hidden border border-slate-800 flex flex-col max-h-[70vh]">
+    <div class="flex-1 bg-black rounded-2xl overflow-hidden border border-slate-800 flex flex-col max-h-[85vh]">
         <!-- Terminal Header -->
         <!-- Header stays fixed while output scrolls -->
         <div class="px-6 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between sticky top-0 z-10 bg-slate-900">
@@ -46,13 +46,19 @@
         </div>
         </div>
         
-        <div id="terminal-panel" class="flex-1 flex flex-col">
+        <div id="terminal-panel" class="flex-1 flex flex-col relative">
             <!-- Terminal Output Area -->
-            <div id="terminal-output" class="flex-1 p-6 font-mono text-xs text-emerald-400 overflow-y-auto space-y-1 selection:bg-emerald-500/30">
+            <div id="terminal-output" class="flex-1 p-6 font-mono text-xs text-emerald-400 space-y-1 selection:bg-emerald-500/30" style="max-height:100%; overflow-y:auto;">
             <p class="text-slate-500">ParaMaster Interactive Shell</p>
             <p class="text-slate-500">Type 'help' for available local commands or select a device to begin SSH.</p>
             <p class="pt-2">user@paramaster:~$ <span class="animate-pulse">_</span></p>
         </div>
+
+            <!-- Scroll-to-bottom button shown when user scrolls up -->
+            <button id="terminal-scroll-bottom" class="hidden items-center gap-2 px-3 py-2 rounded-md bg-sky-600 text-white text-xs font-black shadow-none" style="position:absolute; right:1rem; bottom:4.5rem; z-index:20;">
+                <i class="fas fa-arrow-down mr-2"></i>
+                Latest
+            </button>
 
         <!-- Terminal Input -->
         <!-- Input area stays at the bottom of the terminal panel -->
@@ -69,6 +75,7 @@
     const socket = io();
     const outputArea = document.getElementById('terminal-output');
     const inputArea = document.getElementById('terminal-input');
+    const scrollButton = document.getElementById('terminal-scroll-bottom');
     const deviceSelect = document.getElementById('device-select');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
@@ -86,9 +93,12 @@
             p.innerHTML = text.replace(/\n/g, '<br>');
         }
         outputArea.appendChild(p);
-        // Auto‑scroll only when the user is already at the bottom
+        // Auto‑scroll only when the user is at the bottom. If user scrolled up, show "Latest" button.
         if (autoScroll) {
             outputArea.scrollTop = outputArea.scrollHeight;
+            if (scrollButton) scrollButton.classList.add('hidden');
+        } else {
+            if (scrollButton) scrollButton.classList.remove('hidden');
         }
     }
 
@@ -120,12 +130,26 @@
         button.innerHTML = panel.classList.contains('hidden') ? '<i class="fas fa-square-plus"></i>' : '<i class="fas fa-window-minimize"></i>';
     }
 
-    // Detect manual scrolling to enable/disable auto‑scroll
+    // Detect manual scrolling to enable/disable auto‑scroll and toggle the "Latest" button
     outputArea.addEventListener('scroll', function () {
         const threshold = 20; // pixels from bottom considered "at bottom"
         const atBottom = outputArea.scrollHeight - outputArea.scrollTop - outputArea.clientHeight < threshold;
         autoScroll = atBottom;
+        if (!atBottom) {
+            if (scrollButton) scrollButton.classList.remove('hidden');
+        } else {
+            if (scrollButton) scrollButton.classList.add('hidden');
+        }
     });
+
+    // Click handler for scroll-to-bottom button
+    if (scrollButton) {
+        scrollButton.addEventListener('click', function () {
+            outputArea.scrollTop = outputArea.scrollHeight;
+            autoScroll = true;
+            scrollButton.classList.add('hidden');
+        });
+    }
 
     inputArea.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
