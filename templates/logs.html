@@ -1,28 +1,31 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="px-10 py-6 h-full flex flex-col">
+<div class="px-8 py-6 h-[calc(100vh-64px)] flex flex-col animate-[fadeInUp_0.4s_ease-out]">
+    <!-- Header Area -->
     <div class="flex items-center justify-between mb-8 shrink-0">
         <div>
-            <h3 class="text-lg font-black text-slate-800 tracking-tight">System Events & Logs</h3>
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">See all system events and logs</p>
+            <h3 class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <i class="fas fa-list-check text-indigo-400"></i> System Events & Logs
+            </h3>
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Audit log of automation events and network changes</p>
         </div>
-        <div class="flex items-center gap-4">
-            <button onclick="downloadLogs()" class="flex items-center gap-2 text-sky-500 text-[11px] font-black uppercase tracking-widest hover:underline">
-                <i class="fas fa-file-csv text-sm"></i>
+        <div class="flex items-center gap-3">
+            <button onclick="downloadLogs()" class="flex items-center gap-2 px-5 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 text-xs font-bold rounded-xl transition-all shadow-sm">
+                <i class="fas fa-file-csv text-indigo-400"></i>
                 Download CSV
             </button>
-            <button onclick="window.location.reload()" class="px-6 py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-black transition-all">
+            <button onclick="window.location.reload()" class="px-5 py-2.5 bg-indigo-600/90 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20">
                 Refresh Logs
             </button>
         </div>
     </div>
 
-    <!-- Logs Table -->
-    <div class="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-        <div class="overflow-y-auto flex-1">
+    <!-- Logs Table Container -->
+    <div class="flex-1 glass-card rounded-[2rem] overflow-hidden flex flex-col">
+        <div class="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10">
             <table id="logs-table" class="w-full text-left border-collapse">
-                <thead class="sticky top-0 bg-white z-10">
+                <thead class="sticky top-0 bg-[#13131f] z-10 border-b border-white/5">
                     <tr class="table-header">
                         <th class="px-8 py-5">Timestamp</th>
                         <th class="px-8 py-5">Severity</th>
@@ -30,44 +33,44 @@
                         <th class="px-8 py-5">Message</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-50">
+                <tbody class="divide-y divide-white/5">
                     {% for log in logs %}
-                    <tr class="hover:bg-slate-50/50 transition-all">
-                        <td class="px-8 py-4 text-[11px] font-bold text-slate-400 font-mono">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <tr class="table-row group">
+                        <td class="px-8 py-4 text-xs font-semibold text-slate-500 font-mono">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td class="px-8 py-4">
                             {% if log.level == 'ERROR' %}
-                            <span class="px-2 py-1 bg-rose-50 text-rose-600 text-[9px] font-black uppercase rounded tracking-widest">ERROR</span>
+                            <span class="px-2.5 py-1 bg-rose-500/10 text-rose-400 text-[10px] font-bold uppercase rounded-md tracking-wider border border-rose-500/20">ERROR</span>
                             {% elif log.level == 'WARNING' %}
-                            <span class="px-2 py-1 bg-amber-50 text-amber-600 text-[9px] font-black uppercase rounded tracking-widest">WARNING</span>
+                            <span class="px-2.5 py-1 bg-amber-500/10 text-amber-400 text-[10px] font-bold uppercase rounded-md tracking-wider border border-amber-500/20">WARNING</span>
                             {% else %}
-                            <span class="px-2 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase rounded tracking-widest">INFO</span>
+                            <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase rounded-md tracking-wider border border-emerald-500/20">INFO</span>
                             {% endif %}
                         </td>
-                        <td class="px-8 py-4 text-xs font-black text-slate-700">
+                        <td class="px-8 py-4 text-xs font-bold text-slate-300">
                             {% if log.device_id %}
-                                DEVICE_{{ log.device_id }}
+                                <span class="text-indigo-400">DEVICE_{{ log.device_id }}</span>
                             {% else %}
-                                SYSTEM
+                                <span class="text-slate-500">SYSTEM</span>
                             {% endif %}
                         </td>
-                        <td class="px-8 py-4 text-xs text-slate-500">{{ log.action }}</td>
+                        <td class="px-8 py-4 text-xs text-slate-400">{{ log.action }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="px-8 py-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">No logs found</td>
+                        <td colspan="4" class="px-8 py-16 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">No logs found</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        <!-- Footer Info -->
-        <div class="px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">-</p>
+        <!-- Footer Info / Pagination Stub -->
+        <div class="px-8 py-4 bg-white/1 border-t border-white/5 flex items-center justify-between shrink-0">
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest italic">Showing latest 100 entries</p>
             <div class="flex gap-2">
-                <button class="w-8 h-8 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-400 hover:text-sky-500 transition-all cursor-not-allowed">
+                <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/5 text-slate-600 cursor-not-allowed">
                     <i class="fas fa-chevron-left text-[10px]"></i>
                 </button>
-                <button class="w-8 h-8 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-400 hover:text-sky-500 transition-all cursor-not-allowed">
+                <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/5 text-slate-600 cursor-not-allowed">
                     <i class="fas fa-chevron-right text-[10px]"></i>
                 </button>
             </div>

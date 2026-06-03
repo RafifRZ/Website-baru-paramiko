@@ -5,84 +5,334 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ParaMaster - Network Config Tools</title>
+    <meta name="description" content="ParaMaster — SSH-based network automation and configuration management for Cisco routers.">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        // Immediately apply theme before HTML renders to prevent theme flash
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') {
+                document.documentElement.classList.add('light');
+            } else {
+                document.documentElement.classList.remove('light');
+            }
+        })();
+    </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        :root {
+            /* Greyish Dark Theme Colors */
+            --bg-primary: #1e1e24;
+            --bg-main: #14141a;
+            --bg-sidebar: #191921;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.05);
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --bg-input: rgba(255, 255, 255, 0.04);
+            --border-input: rgba(255, 255, 255, 0.08);
+            --bg-modal: #22222c;
+            --text-nav-item: #5d667c;
+            --text-nav-item-active: #a78bfa;
+            --bg-nav-item-active: linear-gradient(90deg, rgba(139, 92, 246, 0.08) 0%, transparent 100%);
+            --border-active: #8b5cf6;
+        }
+
+        .light {
+            /* Light Theme Colors */
+            --bg-primary: #f8fafc;
+            --bg-main: #f1f5f9;
+            --bg-sidebar: #ffffff;
+            --bg-card: #ffffff;
+            --border-color: rgba(0, 0, 0, 0.06);
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --bg-input: #ffffff;
+            --border-input: rgba(0, 0, 0, 0.08);
+            --bg-modal: #ffffff;
+            --text-nav-item: #64748b;
+            --text-nav-item-active: #6366f1;
+            --bg-nav-item-active: linear-gradient(90deg, rgba(99, 102, 241, 0.06) 0%, transparent 100%);
+            --border-active: #6366f1;
+        }
+
+        /* ── Theme Compatibility & Contrast Fixes for Light Mode ── */
+        .light .text-white:not(button):not(a):not(.btn-primary):not(.btn-login),
+        .light .text-slate-100:not(button):not(a):not(.btn-primary):not(.btn-login),
+        .light .text-slate-200:not(button):not(a):not(.btn-primary):not(.btn-login),
+        .light .text-slate-300:not(button):not(a):not(.btn-primary):not(.btn-login) {
+            color: var(--text-primary) !important;
+        }
+        
+        .light .text-slate-400:not(button):not(a):not(.btn-primary):not(.btn-login),
+        .light .text-slate-500:not(button):not(a):not(.btn-primary):not(.btn-login),
+        .light .text-\[\#525a6e\]:not(button):not(a):not(.btn-primary):not(.btn-login),
+        .light .text-\[\#3d4255\]:not(button):not(a):not(.btn-primary):not(.btn-login) {
+            color: var(--text-secondary) !important;
+        }
+
+        .light .text-indigo-400,
+        .light .text-purple-400,
+        .light .text-sky-400 {
+            color: #6366f1 !important;
+        }
+
+        .light .text-emerald-400 {
+            color: #059669 !important;
+        }
+
+        .light .text-rose-400 {
+            color: #dc2626 !important;
+        }
+
+        .light .bg-white\/5,
+        .light .bg-white\/2,
+        .light .bg-white\/1 {
+            background-color: rgba(0, 0, 0, 0.02) !important;
+        }
+        
+        .light .border-white\/5,
+        .light .border-white\/10 {
+            border-color: rgba(0, 0, 0, 0.06) !important;
+        }
+
+        * { box-sizing: border-box; }
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #fcfdfe;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.2s, color 0.2s;
         }
 
+        /* ── Sidebar ── */
         .sidebar {
-            background-color: #0b0e14;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
             height: 100vh;
-            width: 240px;
+            width: 250px;
+            transition: background-color 0.2s, border-color 0.2s;
         }
 
         .sidebar-item {
-            color: #94a3b8;
-            transition: all 0.3s;
-            border-left: 4px solid transparent;
+            color: var(--text-nav-item);
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            position: relative;
         }
 
-        .sidebar-item:hover,
+        .sidebar-item:hover {
+            color: var(--text-nav-item-active);
+            background: rgba(139, 92, 246, 0.04);
+            border-left-color: rgba(139, 92, 246, 0.2);
+        }
+
         .sidebar-item.active {
-            background-color: #1e293b;
-            color: #38bdf8;
-            border-left: 4px solid #38bdf8;
+            color: var(--text-nav-item-active);
+            background: var(--bg-nav-item-active);
+            border-left-color: var(--border-active);
         }
 
+        .sidebar-item.active::before {
+            content: '';
+            position: absolute;
+            left: -3px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 60%;
+            background: linear-gradient(180deg, var(--border-active), #6366f1);
+            border-radius: 0 4px 4px 0;
+        }
+
+        /* ── Layout ── */
         .main-container {
-            height: calc(100vh - 40px);
+            height: 100vh;
             overflow: hidden;
         }
 
         .content-area {
-            height: calc(100vh - 100px);
+            height: calc(100vh - 64px);
             overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(139, 92, 246, 0.2) transparent;
         }
 
+        .content-area::-webkit-scrollbar { width: 6px; }
+        .content-area::-webkit-scrollbar-track { background: transparent; }
+        .content-area::-webkit-scrollbar-thumb {
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 3px;
+        }
+        .content-area::-webkit-scrollbar-thumb:hover {
+            background: rgba(139, 92, 246, 0.4);
+        }
+
+        /* ── Glassmorphism Cards ── */
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .glass-card-hover:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(139, 92, 246, 0.15);
+        }
+
+        .light .glass-card-hover:hover {
+            background: #ffffff;
+            border-color: rgba(99, 102, 241, 0.2);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.04);
+        }
+
+        /* ── Table ── */
         .table-header {
-            border-bottom: 2px solid #f1f5f9;
-            color: #64748b;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
             text-transform: uppercase;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 800;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.08em;
         }
 
         .table-row {
-            border-bottom: 1px solid #f8fafc;
-            transition: all 0.2s;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.15s ease;
         }
 
         .table-row:hover {
-            background-color: #f1f5f9;
+            background: rgba(139, 92, 246, 0.02);
         }
 
+        .light .table-row:hover {
+            background: rgba(99, 102, 241, 0.02);
+        }
+
+        /* ── Gradient Accent Button ── */
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            font-weight: 800;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2);
+        }
+
+        /* ── Modal Backdrop ── */
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: var(--bg-modal);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 25px 80px rgba(0,0,0,0.4);
+            transition: background-color 0.2s;
+        }
+
+        /* ── Flash Messages ── */
+        .flash-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .flash-error {
+            background: rgba(244, 63, 94, 0.1);
+            border: 1px solid rgba(244, 63, 94, 0.15);
+            color: #f43f5e;
+        }
+
+        .flash-info {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+        }
+
+        /* ── Input Fields ── */
+        .input-dark {
+            background: var(--bg-input);
+            border: 1px solid var(--border-input);
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+
+        .input-dark:focus {
+            border-color: var(--border-active);
+            background: var(--bg-input);
+        }
+
+        .input-dark::placeholder {
+            color: #525a7a;
+        }
+        
+        .light .input-dark::placeholder {
+            color: #94a3b8;
+        }
+
+        /* ── Animations (Simplified/Reduced) ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in { animation: fadeInUp 0.25s ease-out; }
+
+        /* ── Terminal Restore FAB ── */
         .terminal-restore {
             position: fixed;
             bottom: 24px;
             right: 24px;
             z-index: 60;
-            padding: 14px 18px;
-            background: #0ea5e9;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
             color: white;
             border-radius: 9999px;
             border: none;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 800;
             letter-spacing: 0.12em;
             display: none;
-            box-shadow: 0 22px 45px rgba(14, 165, 233, 0.22);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.2);
+            transition: all 0.2s;
         }
 
         .terminal-restore:hover {
-            background: #0284c7;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(99, 102, 241, 0.35);
+        }
+
+        /* ── Badge / Status Dots ── */
+        .status-online {
+            color: #10b981;
+        }
+
+        .status-offline {
+            color: #f43f5e;
+        }
+
+        /* ── Select Dark ── */
+        select.input-dark {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23525a6e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
         }
     </style>
 </head>
@@ -92,72 +342,94 @@
     <div class="flex flex-1 main-container">
         <!-- Sidebar -->
         <aside class="sidebar flex flex-col shrink-0">
-            <div class="p-8">
-                <h1 class="text-white font-black text-xl tracking-tighter italic">PARAMASTER</h1>
-                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">v0.4.5-beta</p>
+            <div class="px-7 pt-8 pb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md">
+                        <i class="fas fa-layer-group text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-white font-extrabold text-base tracking-tight">ParaMaster</h1>
+                        <p class="text-[9px] text-purple-400/50 font-bold uppercase tracking-[0.2em]">v0.6.7-Beta</p>
+                    </div>
+                </div>
             </div>
 
-            <nav class="flex-1 mt-4">
+            <nav class="flex-1 mt-2 px-3 space-y-0.5">
                 <a href="{{ url_for('dashboard') }}"
-                    class="sidebar-item {{ 'active' if request.endpoint == 'dashboard' }} flex items-center gap-4 px-8 py-4">
-                    <i class="fas fa-tower-broadcast w-5"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">devices</span>
+                    class="sidebar-item {{ 'active' if request.endpoint == 'dashboard' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
+                    <i class="fas fa-tower-broadcast w-4 text-center text-xs"></i>
+                    <span class="text-[11px] font-bold tracking-wide">Devices</span>
                 </a>
                 <a href="{{ url_for('all_interfaces') }}"
-                    class="sidebar-item {{ 'active' if request.endpoint == 'all_interfaces' }} flex items-center gap-4 px-8 py-4">
-                    <i class="fas fa-network-wired w-5"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Interfaces</span>
+                    class="sidebar-item {{ 'active' if request.endpoint == 'all_interfaces' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
+                    <i class="fas fa-network-wired w-4 text-center text-xs"></i>
+                    <span class="text-[11px] font-bold tracking-wide">Interfaces</span>
                 </a>
                 <a href="{{ url_for('batch_config') }}"
-                    class="sidebar-item {{ 'active' if request.endpoint == 'batch_config' }} flex items-center gap-4 px-8 py-4">
-                    <i class="fas fa-microchip w-5"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Bulk Action</span>
+                    class="sidebar-item {{ 'active' if request.endpoint == 'batch_config' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
+                    <i class="fas fa-microchip w-4 text-center text-xs"></i>
+                    <span class="text-[11px] font-bold tracking-wide">Bulk Action</span>
+                </a>
+                <a href="{{ url_for('terminal') }}"
+                    class="sidebar-item {{ 'active' if request.endpoint == 'terminal' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
+                    <i class="fas fa-terminal w-4 text-center text-xs"></i>
+                    <span class="text-[11px] font-bold tracking-wide">Terminal</span>
                 </a>
                 <a href="{{ url_for('users') }}"
-                    class="sidebar-item {{ 'active' if request.endpoint == 'users' }} flex items-center gap-4 px-8 py-4">
-                    <i class="fas fa-users w-5"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Users</span>
+                    class="sidebar-item {{ 'active' if request.endpoint == 'users' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
+                    <i class="fas fa-users w-4 text-center text-xs"></i>
+                    <span class="text-[11px] font-bold tracking-wide">Users</span>
                 </a>
                 <a href="{{ url_for('system_logs') }}"
-                    class="sidebar-item {{ 'active' if request.endpoint == 'system_logs' }} flex items-center gap-4 px-8 py-4">
-                    <i class="fas fa-terminal w-5"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">System Logs</span>
+                    class="sidebar-item {{ 'active' if request.endpoint == 'system_logs' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
+                    <i class="fas fa-scroll w-4 text-center text-xs"></i>
+                    <span class="text-[11px] font-bold tracking-wide">System Logs</span>
                 </a>
             </nav>
 
-            <div class="p-8">
+            <div class="px-7 pb-8 pt-4">
+                <div class="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-indigo-500/5 border border-purple-500/10 mb-5">
+                    <p class="text-[9px] font-bold text-purple-300/60 uppercase tracking-wider">Logged in as</p>
+                    <p class="text-xs font-bold text-purple-200 mt-1">{{ current_user.username }}</p>
+                </div>
                 <a href="{{ url_for('logout') }}"
-                    class="text-slate-500 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest flex items-center gap-3">
-                    <i class="fas fa-power-off"></i>
+                    class="text-[#3d4255] hover:text-rose-400 transition-colors text-[11px] font-bold flex items-center gap-2.5">
+                    <i class="fas fa-arrow-right-from-bracket text-[10px]"></i>
                     Logout
                 </a>
             </div>
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 flex flex-col bg-white overflow-hidden">
+        <main class="flex-1 flex flex-col overflow-hidden" style="background-color: var(--bg-main);">
             <!-- Top Nav -->
-            <header class="bg-white border-b border-slate-100 h-16 flex items-center justify-between px-10 shrink-0">
-                <div class="flex items-center gap-3 text-sky-500 text-[10px] font-black uppercase tracking-widest">
-                    <i class="fas fa-rss animate-pulse"></i>
-                    <span> Connected </span>
+            <header class="h-16 flex items-center justify-between px-8 shrink-0 glass-card border-0 border-b" style="border-color: var(--border-color);">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                    <span class="text-[10px] font-bold text-emerald-400/70 uppercase tracking-widest">System Online</span>
                 </div>
-                <h2 class="text-lg font-black text-slate-800 tracking-tight italic">ParaMaster</h2>
-                <div class="flex items-center gap-6">
-<input type="text" id="global-search" placeholder="Search devices..." class="px-4 py-2 bg-slate-50 border border-slate-100 rounded text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none" list="device-options">
-                    <a href="{{ url_for('logout') }}"
-                        class="text-sky-500 text-xs font-black uppercase tracking-widest hover:underline">Logout</a>
+                <div class="flex items-center gap-3.5">
+                    <!-- Theme Toggle Switch -->
+                    <button onclick="toggleTheme()" class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors" title="Toggle Light/Dark Mode" id="theme-toggle-btn">
+                        <i class="fas fa-sun" id="theme-toggle-icon"></i>
+                    </button>
+                    <!-- Search -->
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[#3d4255] text-[10px]"></i>
+                        <input type="text" id="global-search" placeholder="Search..."
+                            class="input-dark pl-8 pr-4 py-2 rounded-lg text-[11px] font-medium w-48 outline-none">
+                    </div>
                 </div>
             </header>
 
             <!-- Scrollable Content -->
             <div class="content-area">
-                {% with messages = get_flashed_messages() %}
+                {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
-                {% for message in messages %}
-                <div
-                    class="m-8 p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold rounded-lg flex items-center gap-3">
-                    <i class="fas fa-check-circle"></i>
+                {% for category, message in messages %}
+                <div class="mx-8 mt-6 px-5 py-4 rounded-xl text-xs font-bold flex items-center gap-3 animate-fade-in
+                    {% if category == 'error' %}flash-error{% elif category == 'success' %}flash-success{% else %}flash-info{% endif %}">
+                    <i class="fas {% if category == 'error' %}fa-circle-exclamation{% elif category == 'success' %}fa-check-circle{% else %}fa-info-circle{% endif %}"></i>
                     {{ message }}
                 </div>
                 {% endfor %}
@@ -169,9 +441,25 @@
         </main>
     </div>
 
-    <button id="terminal-restore" class="terminal-restore" onclick="openTerminalRestore()">TERMINAL ACTIVE</button>
+    <button id="terminal-restore" class="terminal-restore" onclick="openTerminalRestore()">
+        <i class="fas fa-terminal mr-2"></i> TERMINAL ACTIVE
+    </button>
 
     <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-toggle-icon');
+            if (html.classList.contains('light')) {
+                html.classList.remove('light');
+                localStorage.setItem('theme', 'dark');
+                if (icon) icon.className = 'fas fa-sun';
+            } else {
+                html.classList.add('light');
+                localStorage.setItem('theme', 'light');
+                if (icon) icon.className = 'fas fa-moon';
+            }
+        }
+
         function openTerminal() {
             window.location.href = "/terminal";
         }
@@ -193,7 +481,56 @@
                 window.location.href = "/terminal";
             }
         }
-        document.addEventListener('DOMContentLoaded', refreshTerminalRestore);
+        
+        function showNotification(message, category = 'success') {
+            const contentArea = document.querySelector('.content-area');
+            if (!contentArea) return;
+            
+            // Create notification element
+            const el = document.createElement('div');
+            el.className = `mx-8 mt-6 px-5 py-4 rounded-xl text-xs font-bold flex items-center gap-3 animate-fade-in flash-${category}`;
+            
+            let iconClass = 'fa-info-circle';
+            if (category === 'success') iconClass = 'fa-check-circle';
+            else if (category === 'error') iconClass = 'fa-circle-exclamation';
+            
+            el.innerHTML = `<i class="fas ${iconClass}"></i> ${message}`;
+            
+            // Insert at the top of contentArea
+            contentArea.insertBefore(el, contentArea.firstChild);
+            
+            // Auto dismiss
+            setTimeout(function() {
+                el.style.transition = 'opacity 0.5s, transform 0.5s';
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(-8px)';
+                setTimeout(function() { el.remove(); }, 500);
+            }, 5000);
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshTerminalRestore();
+            const icon = document.getElementById('theme-toggle-icon');
+            if (icon) {
+                if (document.documentElement.classList.contains('light')) {
+                    icon.className = 'fas fa-moon';
+                } else {
+                    icon.className = 'fas fa-sun';
+                }
+            }
+        });
+
+        // Auto-dismiss flash messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.flash-success, .flash-error, .flash-info').forEach(function(el) {
+                setTimeout(function() {
+                    el.style.transition = 'opacity 0.5s, transform 0.5s';
+                    el.style.opacity = '0';
+                    el.style.transform = 'translateY(-8px)';
+                    setTimeout(function() { el.remove(); }, 500);
+                }, 5000);
+            });
+        });
     </script>
 </body>
 

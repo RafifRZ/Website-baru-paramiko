@@ -1,50 +1,54 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="px-10 py-6">
-    <div class="flex items-center justify-between mb-10">
+<div class="px-8 py-6 animate-[fadeInUp_0.4s_ease-out]">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
         <div class="flex items-center gap-4">
-            <a href="{{ url_for('batch_config') }}" class="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all shadow-sm">
+            <a href="{{ url_for('batch_config') }}" class="w-10 h-10 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-400 transition-all shadow-sm">
                 <i class="fas fa-arrow-left"></i>
             </a>
-            <h3 class="text-lg font-black text-slate-800 tracking-tight">Execution Results</h3>
+            <div>
+                <h3 class="text-2xl font-black text-white tracking-tight">Execution Results</h3>
+                <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Results of commands executed across target nodes</p>
+            </div>
         </div>
-        <button onclick="window.print()" class="flex items-center gap-2 text-indigo-600 text-[11px] font-black uppercase tracking-widest hover:underline">
-            <i class="fas fa-print"></i>
+        <button onclick="window.print()" class="flex items-center gap-2 px-5 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 text-xs font-bold rounded-xl transition-all shadow-sm">
+            <i class="fas fa-print text-indigo-400"></i>
             Print Report
         </button>
     </div>
 
     <div class="grid grid-cols-1 gap-6">
         {% for result in results %}
-        <div class="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm transition-all hover:shadow-xl hover:shadow-indigo-500/5">
-            <div class="px-8 py-6 border-b border-slate-50 flex items-center justify-between {{ 'bg-emerald-50/30' if result.success else 'bg-rose-50/30' }}">
+        <div class="glass-card rounded-[2rem] overflow-hidden">
+            <div class="px-8 py-5 border-b border-white/5 flex items-center justify-between {{ 'bg-emerald-500/5' if result.success else 'bg-rose-500/5' }}">
                 <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 {{ 'bg-emerald-100 text-emerald-600' if result.success else 'bg-rose-100 text-rose-600' }} rounded-2xl flex items-center justify-center text-lg">
-                        <i class="fas {{ 'fa-check-circle' if result.success else 'fa-exclamation-triangle' }}"></i>
+                    <div class="w-12 h-12 {{ 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' if result.success else 'bg-rose-500/10 text-rose-400 border-rose-500/20' }} border rounded-2xl flex items-center justify-center text-lg shrink-0">
+                        <i class="fas {{ 'fa-circle-check' if result.success else 'fa-circle-exclamation' }}"></i>
                     </div>
                     <div>
-                        <h4 class="text-sm font-black text-slate-800 tracking-tight">{{ result.hostname }}</h4>
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">SSH execution status</p>
+                        <h4 class="text-sm font-bold text-white tracking-tight">{{ result.hostname }}</h4>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">SSH EXECUTION STATUS</p>
                     </div>
                 </div>
-                <span class="px-4 py-1.5 {{ 'bg-emerald-500' if result.success else 'bg-rose-500' }} text-white text-[10px] font-black uppercase tracking-widest rounded-full">
+                <span class="px-4 py-1.5 {{ 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' if result.success else 'bg-rose-500/10 text-rose-400 border-rose-500/20' }} border text-xs font-bold uppercase tracking-wider rounded-full">
                     {{ 'Success' if result.success else 'Failed' }}
                 </span>
             </div>
-            <div class="p-8 bg-slate-900 overflow-x-auto">
-                <pre class="text-xs font-mono text-emerald-400/80 leading-relaxed">{{ result.output }}</pre>
+            <div class="p-6 bg-[#05050a] overflow-x-auto border-t border-white/5">
+                <pre class="text-xs font-mono text-emerald-400/80 leading-relaxed font-semibold selection:bg-emerald-500/30">{{ result.output }}</pre>
             </div>
         </div>
         {% endfor %}
         
         {% if not results %}
-        <div class="bg-white rounded-3xl border border-slate-100 p-20 flex flex-col items-center justify-center text-center">
-            <div class="w-20 h-20 bg-slate-50 text-slate-200 rounded-3xl flex items-center justify-center text-3xl mb-6">
+        <div class="glass-card rounded-[2.5rem] p-20 flex flex-col items-center justify-center text-center">
+            <div class="w-20 h-20 bg-white/5 border border-white/5 text-slate-500 rounded-[2rem] flex items-center justify-center text-3xl mb-6">
                 <i class="fas fa-box-open"></i>
             </div>
-            <h4 class="text-lg font-black text-slate-800 tracking-tight">No Results Found</h4>
-            <p class="text-slate-400 mt-2 font-medium max-w-xs">No execution tasks were performed. Please check your command format or device selection.</p>
+            <h4 class="text-lg font-black text-white tracking-tight">No Results Found</h4>
+            <p class="text-slate-400 mt-2 text-xs font-semibold max-w-xs">No execution tasks were performed. Please check your command format or device selection.</p>
         </div>
         {% endif %}
     </div>

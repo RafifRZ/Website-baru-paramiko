@@ -1,71 +1,74 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="px-10 py-6 h-full flex flex-col">
-    <div class="flex items-center justify-between mb-8 shrink-0">
+<div class="px-8 py-6 h-[calc(100vh-64px)] flex flex-col animate-[fadeInUp_0.4s_ease-out]">
+    <!-- Title / Control Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 shrink-0">
         <div>
-            <h3 class="text-lg font-black text-slate-800 tracking-tight">Interactive CLI Terminal</h3>
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Direct SSH access to your network infrastructure</p>
+            <h3 class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <i class="fas fa-terminal text-sky-400"></i> Interactive CLI Terminal
+            </h3>
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Direct SSH access to your network infrastructure</p>
         </div>
-        <div class="flex items-center gap-4">
-            <select id="device-select" class="px-4 py-2 bg-white border border-slate-100 rounded text-xs font-bold text-slate-600 focus:ring-1 focus:ring-sky-500 outline-none">
-                <option value="">Select Device...</option>
+        <div class="flex items-center gap-3">
+            <select id="device-select" class="px-4 py-2.5 input-dark rounded-xl text-xs font-semibold focus:outline-none cursor-pointer">
+                <option value="" class="bg-[#141420] text-white">Select Device...</option>
                 {% for device in devices %}
-                <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }})</option>
+                <option value="{{ device.id }}" class="bg-[#141420] text-white">{{ device.hostname }} ({{ device.ip_address }})</option>
                 {% endfor %}
             </select>
-            <button onclick="connectTerminal()" class="px-6 py-2 bg-sky-500 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-sky-600 transition-all shadow-lg shadow-sky-100">
+            <button onclick="connectTerminal()" class="px-5 py-2.5 bg-sky-500/90 hover:bg-sky-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-sky-500/20">
                 Establish Session
             </button>
         </div>
     </div>
 
     <!-- Terminal Container -->
-    <!-- Limit the terminal panel height to avoid page scrolling and keep the input fixed at the bottom -->
-    <div class="flex-1 bg-black rounded-2xl overflow-hidden border border-slate-800 flex flex-col max-h-[85vh]">
+    <div class="flex-1 bg-[#05050a] rounded-[2rem] border border-white/5 flex flex-col overflow-hidden shadow-2xl relative">
+        <!-- Scanline subtle overlay -->
+        <div class="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[size:100%_4px,6px_100%] opacity-40"></div>
+
         <!-- Terminal Header -->
-        <!-- Header stays fixed while output scrolls -->
-        <div class="px-6 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between sticky top-0 z-10 bg-slate-900">
+        <div class="px-6 py-4 bg-white/2 border-b border-white/5 flex items-center justify-between z-10">
             <div class="flex items-center gap-2">
-                <div class="w-3 h-3 rounded-full bg-rose-500"></div>
-                <div class="w-3 h-3 rounded-full bg-amber-500"></div>
-                <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
-                <span class="ml-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">ssh_session_01.term</span>
+                <div class="w-3 h-3 rounded-full bg-rose-500/80"></div>
+                <div class="w-3 h-3 rounded-full bg-amber-500/80"></div>
+                <div class="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+                <span class="ml-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">ssh_session.term</span>
             </div>
-            <div class="flex items-center gap-3">
-            <div id="connection-status" class="text-[9px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                <span id="status-dot" class="w-1.5 h-1.5 bg-slate-700 rounded-full"></span>
-                <span id="status-text">Disconnected</span>
+            <div class="flex items-center gap-4">
+                <div id="connection-status" class="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <span id="status-dot" class="w-2 h-2 bg-slate-700 rounded-full"></span>
+                    <span id="status-text">Disconnected</span>
+                </div>
+                <button id="terminal-disconnect" onclick="disconnectTerminal()" class="hidden text-rose-400 hover:text-rose-300 text-[10px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all">
+                    Disconnect
+                </button>
+                <button id="terminal-minimize" onclick="toggleTerminal()" class="text-slate-400 hover:text-white text-xs uppercase tracking-widest font-black px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all">
+                    <i class="fas fa-window-minimize"></i>
+                </button>
             </div>
-            <button id="terminal-disconnect" onclick="disconnectTerminal()" class="hidden text-red-400 hover:text-red-200 text-xs uppercase tracking-widest font-black px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 transition-all">
-                Disconnect
-            </button>
-            <button id="terminal-minimize" onclick="toggleTerminal()" class="text-slate-400 hover:text-white text-xs uppercase tracking-widest font-black px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 transition-all">
-                <i class="fas fa-window-minimize"></i>
-            </button>
-        </div>
         </div>
         
-        <div id="terminal-panel" class="flex-1 flex flex-col relative">
+        <div id="terminal-panel" class="flex-1 flex flex-col relative overflow-hidden">
             <!-- Terminal Output Area -->
-            <div id="terminal-output" class="flex-1 p-6 font-mono text-xs text-emerald-400 space-y-1 selection:bg-emerald-500/30" style="max-height:100%; overflow-y:auto;">
-            <p class="text-slate-500">ParaMaster Interactive Shell</p>
-            <p class="text-slate-500">Type 'help' for available local commands or select a device to begin SSH.</p>
-            <p class="pt-2">user@paramaster:~$ <span class="animate-pulse">_</span></p>
-        </div>
+            <div id="terminal-output" class="flex-1 p-6 font-mono text-xs text-emerald-400 space-y-1 selection:bg-emerald-500/30 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10" style="max-height: calc(100% - 50px);">
+                <p class="text-slate-500">ParaMaster Interactive Shell</p>
+                <p class="text-slate-500">Type 'help' for available local commands or select a device to begin SSH.</p>
+                <p class="pt-2">user@paramaster:~$ <span class="animate-pulse">_</span></p>
+            </div>
 
             <!-- Scroll-to-bottom button shown when user scrolls up -->
-            <button id="terminal-scroll-bottom" class="hidden items-center gap-2 px-3 py-2 rounded-md bg-sky-600 text-white text-xs font-black shadow-none" style="position:absolute; right:1rem; bottom:4.5rem; z-index:20;">
-                <i class="fas fa-arrow-down mr-2"></i>
-                Latest
+            <button id="terminal-scroll-bottom" class="hidden items-center gap-2 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all" style="position:absolute; right:1.5rem; bottom:5rem; z-index:20;">
+                <i class="fas fa-arrow-down"></i> Latest
             </button>
 
-        <!-- Terminal Input -->
-        <!-- Input area stays at the bottom of the terminal panel -->
-        <div class="px-6 py-4 bg-slate-900 border-t border-slate-800 sticky bottom-0">
-            <div class="flex items-center gap-3">
-                <span class="text-sky-500 font-mono text-xs font-bold">❯</span>
-                <input type="text" id="terminal-input" class="flex-1 bg-transparent border-none text-white font-mono text-xs outline-none" placeholder="Enter CLI command..." autocomplete="off">
+            <!-- Terminal Input -->
+            <div class="px-6 py-4 bg-white/2 border-t border-white/5 z-10">
+                <div class="flex items-center gap-3">
+                    <span class="text-sky-400 font-mono text-xs font-bold">❯</span>
+                    <input type="text" id="terminal-input" class="flex-1 bg-transparent border-none text-white font-mono text-xs outline-none focus:ring-0" placeholder="Enter CLI command..." autocomplete="off">
+                </div>
             </div>
         </div>
     </div>
@@ -79,21 +82,25 @@
     const deviceSelect = document.getElementById('device-select');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
-    // Scroll lock flag – true when user has manually scrolled away from bottom
     let autoScroll = true;
+
+    // Command History Variables
+    const commandHistory = [];
+    let historyIndex = -1;
 
     function appendToTerminal(text, type = 'output') {
         const p = document.createElement('p');
         if (type === 'command') {
-            p.innerHTML = `<span class="text-sky-500 font-bold">❯ </span><span class="text-white font-bold">${text}</span>`;
+            p.innerHTML = `<span class="text-sky-400 font-bold">❯ </span><span class="text-white font-bold">${text}</span>`;
         } else if (type === 'error') {
             p.innerHTML = `<span class="text-rose-500 font-bold">[ERROR] </span>${text}`;
         } else {
-            // Support multi-line output
-            p.innerHTML = text.replace(/\n/g, '<br>');
+            // Support multi-line output and escape HTML to prevent XSS except for br
+            let escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            p.innerHTML = escaped.replace(/\n/g, '<br>');
         }
         outputArea.appendChild(p);
-        // Auto‑scroll only when the user is at the bottom. If user scrolled up, show "Latest" button.
+        
         if (autoScroll) {
             outputArea.scrollTop = outputArea.scrollHeight;
             if (scrollButton) scrollButton.classList.add('hidden');
@@ -109,7 +116,6 @@
             return;
         }
 
-        // Make sure the terminal panel is visible before establishing connection
         const panel = document.getElementById('terminal-panel');
         if (panel && panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
@@ -118,7 +124,7 @@
         appendToTerminal(`Connecting to node [ID:${deviceId}]...`);
         socket.emit('connect_terminal', { device_id: deviceId });
         
-        statusDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse';
+        statusDot.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
         statusText.innerText = 'Connecting...';
     }
 
@@ -130,9 +136,8 @@
         button.innerHTML = panel.classList.contains('hidden') ? '<i class="fas fa-square-plus"></i>' : '<i class="fas fa-window-minimize"></i>';
     }
 
-    // Detect manual scrolling to enable/disable auto‑scroll and toggle the "Latest" button
     outputArea.addEventListener('scroll', function () {
-        const threshold = 20; // pixels from bottom considered "at bottom"
+        const threshold = 20;
         const atBottom = outputArea.scrollHeight - outputArea.scrollTop - outputArea.clientHeight < threshold;
         autoScroll = atBottom;
         if (!atBottom) {
@@ -142,7 +147,6 @@
         }
     });
 
-    // Click handler for scroll-to-bottom button
     if (scrollButton) {
         scrollButton.addEventListener('click', function () {
             outputArea.scrollTop = outputArea.scrollHeight;
@@ -151,52 +155,80 @@
         });
     }
 
-    inputArea.addEventListener('keypress', function (e) {
+    // Input handlers with Command History
+    inputArea.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
-            const cmd = inputArea.value;
+            const cmd = inputArea.value.trim();
             if (cmd) {
                 appendToTerminal(cmd, 'command');
                 socket.emit('terminal_input', { data: cmd + '\n' });
+                
+                // Add to command history
+                if (commandHistory.length === 0 || commandHistory[commandHistory.length - 1] !== cmd) {
+                    commandHistory.push(cmd);
+                }
+                historyIndex = commandHistory.length;
                 inputArea.value = '';
             }
+        } else if (e.key === 'ArrowUp') {
+            if (commandHistory.length > 0) {
+                if (historyIndex > 0) {
+                    historyIndex--;
+                } else if (historyIndex === -1) {
+                    historyIndex = commandHistory.length - 1;
+                }
+                inputArea.value = commandHistory[historyIndex];
+                // Move cursor to end
+                setTimeout(() => {
+                    inputArea.selectionStart = inputArea.selectionEnd = inputArea.value.length;
+                }, 0);
+            }
+            e.preventDefault();
+        } else if (e.key === 'ArrowDown') {
+            if (commandHistory.length > 0) {
+                if (historyIndex < commandHistory.length - 1 && historyIndex !== -1) {
+                    historyIndex++;
+                    inputArea.value = commandHistory[historyIndex];
+                } else {
+                    historyIndex = commandHistory.length;
+                    inputArea.value = '';
+                }
+            }
+            e.preventDefault();
         }
     });
 
     socket.on('terminal_output', function(msg) {
         if (msg.data.includes('Connection failed') || msg.data.includes('Device not found')) {
             appendToTerminal(msg.data, 'error');
-            statusDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500';
+            statusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
             statusText.innerText = 'Failed';
             localStorage.removeItem('activeTerminalDeviceId');
-            // hide disconnect button on failure
             document.getElementById('terminal-disconnect').classList.add('hidden');
         } else {
             appendToTerminal(msg.data);
             if (statusText.innerText !== 'Connected') {
-                statusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
+                statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
                 statusText.innerText = 'Connected';
                 localStorage.setItem('activeTerminalDeviceId', deviceSelect.value);
-                // show disconnect button when connected
                 document.getElementById('terminal-disconnect').classList.remove('hidden');
-                // show restore button across pages
+                
                 const restoreBtn = document.getElementById('terminal-restore');
                 if (restoreBtn) restoreBtn.style.display = 'inline-flex';
             }
         }
     });
 
-    // Disconnect function – clears UI and notifies server
     function disconnectTerminal() {
         socket.emit('disconnect_terminal');
-        statusDot.className = 'w-1.5 h-1.5 rounded-full bg-slate-700';
+        statusDot.className = 'w-2 h-2 rounded-full bg-slate-700';
         statusText.innerText = 'Disconnected';
         localStorage.removeItem('activeTerminalDeviceId');
-        // Hide disconnect button
         document.getElementById('terminal-disconnect').classList.add('hidden');
-        // Hide terminal restore button across pages
+        
         const restoreBtn = document.getElementById('terminal-restore');
         if (restoreBtn) restoreBtn.style.display = 'none';
-        // Hide terminal panel to reflect inactive state
+        
         const panel = document.getElementById('terminal-panel');
         if (panel && !panel.classList.contains('hidden')) {
             panel.classList.add('hidden');
@@ -204,12 +236,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        // Ensure UI starts in a clean state
         const disconnectBtn = document.getElementById('terminal-disconnect');
         const restoreBtn = document.getElementById('terminal-restore');
         if (disconnectBtn) disconnectBtn.classList.add('hidden');
         if (restoreBtn) restoreBtn.style.display = 'none';
-        // If a session is stored, show the disconnect button
         if (localStorage.getItem('activeTerminalDeviceId') && disconnectBtn) {
             disconnectBtn.classList.remove('hidden');
         }

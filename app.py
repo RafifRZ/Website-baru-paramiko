@@ -97,7 +97,7 @@ def login():
         if user and check_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for('dashboard'))
-        flash('Invalid username or password')
+        flash('Invalid username or password', 'error')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -138,25 +138,25 @@ def add_device():
     if hostname:
         existing = Device.query.filter((Device.ip_address == ip) | (Device.hostname == hostname)).first()
         if existing:
-            flash('Router dengan IP atau hostname ini sudah terdaftar.')
+            flash('Router dengan IP atau hostname ini sudah terdaftar.', 'error')
             return redirect(url_for('dashboard'))
     else:
         existing = Device.query.filter(Device.ip_address == ip).first()
         if existing:
-            flash('Router dengan IP ini sudah terdaftar.')
+            flash('Router dengan IP ini sudah terdaftar.', 'error')
             return redirect(url_for('dashboard'))
 
     # If hostname is not provided, fetch it from device
     if not hostname:
         resolved_hostname, msg = get_device_hostname(ip, username, password, port)
         if not resolved_hostname:
-            flash(f'Router tidak dapat terhubung atau gagal mengambil hostname otomatis: {msg}')
+            flash(f'Router tidak dapat terhubung atau gagal mengambil hostname otomatis: {msg}', 'error')
             return redirect(url_for('dashboard'))
         
         # Verify the resolved hostname is not a duplicate in DB
         existing_hostname = Device.query.filter_by(hostname=resolved_hostname).first()
         if existing_hostname:
-            flash(f'Router dengan hostname "{resolved_hostname}" sudah terdaftar.')
+            flash(f'Router dengan hostname "{resolved_hostname}" sudah terdaftar.', 'error')
             return redirect(url_for('dashboard'))
             
         hostname = resolved_hostname
@@ -164,28 +164,56 @@ def add_device():
         # Otherwise, just verify the status using the provided credentials
         success, msg = check_router_status(ip, username, password, port)
         if not success:
-            flash(f'Router tidak dapat terhubung. Pastikan IP, port, dan kredensial benar: {msg}')
+            flash(f'Router tidak dapat terhubung. Pastikan IP, port, dan kredensial benar: {msg}', 'error')
             return redirect(url_for('dashboard'))
 
     new_device = Device(hostname=hostname, ip_address=ip, username=username, password=password, port=port, status='Online')
     db.session.add(new_device)
     db.session.commit()
     log_action(f"Added device {hostname} ({ip}:{port})")
-    flash('Device registered successfully')
+    flash('Device registered successfully', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/refresh-status')
 @login_required
 def refresh_status():
+    import concurrent.futures
     devices = Device.query.all()
-    for device in devices:
+    
+    def check_device(device):
         success, _ = check_router_status(device.ip_address, device.username, device.password, device.port or 22)
-        device.status = 'Online' if success else 'Offline'
+        return device.id, 'Online' if success else 'Offline'
+
+    # Check device statuses in parallel to speed up background process
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        results = list(executor.map(check_device, devices))
+
+    # Update states in the database
+    status_map = dict(results)
+    for device in devices:
+        device.status = status_map.get(device.id, 'Offline')
     db.session.commit()
-    flash('Status perangkat berhasil diperbarui.')
+    
+    # Check if AJAX is requested
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.args.get('ajax') == '1':
+        updated_devices = [{
+            'id': d.id,
+            'status': d.status
+        } for d in devices]
+        return jsonify({
+            'success': True,
+            'devices': updated_devices,
+            'stats': {
+                'total': len(devices),
+                'online': sum(1 for d in devices if d.status == 'Online'),
+                'offline': sum(1 for d in devices if d.status != 'Online')
+            }
+        })
+
+    flash('Status perangkat berhasil diperbarui.', 'success')
     return redirect(url_for('dashboard'))
 
-@app.route('/device/delete/<int:device_id>')
+@app.route('/device/delete/<int:device_id>', methods=['POST'])
 @login_required
 def delete_device(device_id):
     device = Device.query.get_or_404(device_id)
@@ -193,7 +221,7 @@ def delete_device(device_id):
     db.session.delete(device)
     db.session.commit()
     log_action(f"Deleted device {hostname}")
-    flash(f'Device {hostname} removed')
+    flash(f'Device {hostname} removed', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/device/update/<int:device_id>', methods=['POST'])
@@ -212,12 +240,12 @@ def update_device(device_id):
         ((Device.ip_address == new_ip) | (Device.hostname == new_hostname)) & (Device.id != device_id)
     ).first()
     if duplicate:
-        flash('Router dengan IP atau hostname ini sudah terdaftar pada perangkat lain.')
+        flash('Router dengan IP atau hostname ini sudah terdaftar pada perangkat lain.', 'error')
         return redirect(url_for('device_detail', device_id=device_id))
 
     success, msg = check_router_status(new_ip, new_username, password_to_verify, new_port)
     if not success:
-        flash('Verifikasi gagal: pastikan IP, port, dan kredensial benar sebelum menyimpan perubahan.')
+        flash('Verifikasi gagal: pastikan IP, port, dan kredensial benar sebelum menyimpan perubahan.', 'error')
         return redirect(url_for('device_detail', device_id=device_id))
 
     device.hostname = new_hostname
@@ -229,7 +257,7 @@ def update_device(device_id):
     device.status = 'Online'
     db.session.commit()
     log_action(f"Updated device info for {old_hostname} -> {device.hostname}")
-    flash(f'Device {device.hostname} updated')
+    flash(f'Device {device.hostname} updated', 'success')
     return redirect(url_for('device_detail', device_id=device.id))
 
 @app.route('/device/<int:device_id>')
@@ -263,7 +291,7 @@ def configure_ip(device_id):
 
     if action == 'Add IP':
         if not ip_raw:
-            flash('Masukkan IP address sebelum menambahkan IP.')
+            flash('Masukkan IP address sebelum menambahkan IP.', 'error')
             return redirect(url_for('device_detail', device_id=device_id))
 
         ip = ip_raw
@@ -284,15 +312,15 @@ def configure_ip(device_id):
     elif action == 'No Shutdown':
         success, msg = no_shutdown_interface(device.ip_address, device.username, device.password, device.port or 22, interface)
     else:
-        flash('Action tidak valid.')
+        flash('Action tidak valid.', 'error')
         return redirect(url_for('device_detail', device_id=device_id))
     
     if success:
         log_action(f"Performed {action} on {interface} ({ip_raw or ''}) for {device.hostname}", device_id=device.id)
-        flash(f'Successfully performed {action} on {interface}')
+        flash(f'Successfully performed {action} on {interface}', 'success')
     else:
         log_action(f"Failed to configure {interface} on {device.hostname}: {msg}", level='ERROR', device_id=device.id)
-        flash(f'Failed to configure {interface}: {msg}')
+        flash(f'Failed to configure {interface}: {msg}', 'error')
     
     return redirect(url_for('device_detail', device_id=device_id))
 
@@ -318,7 +346,7 @@ def batch_config():
                 # Prefer a column named 'command', otherwise take the first column
                 commands = df['command'].tolist() if 'command' in df.columns else df.iloc[:, 0].tolist()
             except Exception as e:
-                flash(f"Error reading CSV: {e}")
+                flash(f"Error reading CSV: {e}", 'error')
                 return redirect(url_for('batch_config'))
 
         if raw_commands:
@@ -371,27 +399,27 @@ def add_user():
     password = request.form.get('password')
     
     if User.query.filter_by(username=username).first():
-        flash('Username already exists')
+        flash('Username already exists', 'error')
     else:
         new_user = User(username=username, password=generate_password_hash(password))
         db.session.add(new_user)
         db.session.commit()
         log_action(f"Created new system user: {username}")
-        flash('User created successfully')
+        flash('User created successfully', 'success')
     return redirect(url_for('users'))
 
-@app.route('/users/delete/<int:user_id>')
+@app.route('/users/delete/<int:user_id>', methods=['POST'])
 @login_required
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
     if user.username == 'admin':
-        flash('Cannot delete default admin')
+        flash('Cannot delete default admin', 'error')
     else:
         username = user.username
         db.session.delete(user)
         db.session.commit()
         log_action(f"Deleted system user: {username}")
-        flash('User removed')
+        flash('User removed', 'success')
     return redirect(url_for('users'))
 
 @app.route('/interfaces')
