@@ -16,6 +16,14 @@ import pytz
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
+def get_user_devices():
+    if current_user.username == 'admin':
+        return Device.query.all()
+    allowed_ids = current_user.get_allowed_device_ids()
+    if not allowed_ids:
+        return []
+    return Device.query.filter(Device.id.in_(allowed_ids)).all()
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///network.db'
@@ -92,7 +100,7 @@ def prepare_db_schema():
 @app.route('/')
 @login_required
 def dashboard():
-    devices = Device.query.all()
+    devices = get_user_devices()
     stats = {
         'total': len(devices),
         'online': Device.query.filter_by(status='Online').count(),
@@ -192,7 +200,7 @@ def add_device():
 @login_required
 def refresh_status():
     import concurrent.futures
-    devices = Device.query.all()
+    devices = get_user_devices()
     
     def check_device(device):
         success, _ = check_router_status(device.ip_address, device.username, device.password, device.port or 22)
@@ -230,6 +238,9 @@ def refresh_status():
 @app.route('/device/delete/<int:device_id>', methods=['POST'])
 @login_required
 def delete_device(device_id):
+    if current_user.username != 'admin' and device_id not in current_user.get_allowed_device_ids():
+        flash('Unauthorized to delete this device', 'error')
+        return redirect(url_for('dashboard'))
     device = Device.query.get_or_404(device_id)
     hostname = device.hostname
     db.session.delete(device)
@@ -241,6 +252,9 @@ def delete_device(device_id):
 @app.route('/device/update/<int:device_id>', methods=['POST'])
 @login_required
 def update_device(device_id):
+    if current_user.username != 'admin' and device_id not in current_user.get_allowed_device_ids():
+        flash('Unauthorized to update this device', 'error')
+        return redirect(url_for('dashboard'))
     device = Device.query.get_or_404(device_id)
     old_hostname = device.hostname
     new_hostname = request.form.get('hostname')
@@ -277,6 +291,9 @@ def update_device(device_id):
 @app.route('/device/<int:device_id>')
 @login_required
 def device_detail(device_id):
+    if current_user.username != 'admin' and device_id not in current_user.get_allowed_device_ids():
+        flash('Unauthorized to view this device', 'error')
+        return redirect(url_for('dashboard'))
     device = Device.query.get_or_404(device_id)
     success, msg = check_router_status(device.ip_address, device.username, device.password, device.port or 22)
 
@@ -298,6 +315,9 @@ def device_detail(device_id):
 @app.route('/device/<int:device_id>/configure_ip', methods=['POST'])
 @login_required
 def configure_ip(device_id):
+    if current_user.username != 'admin' and device_id not in current_user.get_allowed_device_ids():
+        flash('Unauthorized to configure this device', 'error')
+        return redirect(url_for('dashboard'))
     device = Device.query.get_or_404(device_id)
     interface = request.form.get('interface')
     action = request.form.get('action')
@@ -357,9 +377,9 @@ def batch_config():
         if raw_commands:
             commands.extend([c.strip() for c in raw_commands.split('\n') if c.strip()])
 
-        # Default to all devices when none are selected
+        # Default to all user devices when none are selected
         if not device_ids:
-            device_ids = [str(d.id) for d in Device.query.with_entities(Device.id).all()]
+            device_ids = [str(d.id) for d in get_user_devices()]
 
         # Convert IDs to integers for a bulk query
         device_ids_int = [int(i) for i in device_ids]
@@ -386,7 +406,7 @@ def batch_config():
         return render_template('batch_results.html', results=results)
 
     # GET request – render the configuration page with all devices
-    devices = Device.query.all()
+    devices = get_user_devices()
     return render_template('batch_config.html', devices=devices)
 
 # --- User Management ---
@@ -394,22 +414,24 @@ def batch_config():
 @app.route('/users')
 @login_required
 def users():
-    users_list = User.query.all()
+    if current_user.username == 'admin':
+        users_list = User.query.all()
+    else:
+        users_list = User.query.filter_by(id=current_user.id).all()
     devices = Device.query.all()
     return render_template('users.html', users=users_list, devices=devices)
-    return render_template('users.html', users=users_list)
 
 @app.route('/users/add', methods=['POST'])
 @login_required
 def add_user():
+    if current_user.username != 'admin':
+        flash('Access denied', 'error')
+        return redirect(url_for('users'))
     username = request.form.get('username')
     password = request.form.get('password')
     
     # Get selected device IDs (checkboxes named 'devices')
     selected_devices = request.form.getlist('devices')
-    # If none selected, default to all devices
-    if not selected_devices:
-        selected_devices = [str(d.id) for d in Device.query.all()]
     allowed_devices_str = ','.join([d for d in selected_devices if d])
     
     if User.query.filter_by(username=username).first():
@@ -425,6 +447,9 @@ def add_user():
 @app.route('/users/delete/<int:user_id>', methods=['POST'])
 @login_required
 def delete_user(user_id):
+    if current_user.username != 'admin' and current_user.id != user_id:
+        flash('Access denied', 'error')
+        return redirect(url_for('users'))
     user = User.query.get_or_404(user_id)
     if user.username == 'admin':
         flash('Cannot delete default admin', 'error')
@@ -440,13 +465,13 @@ def delete_user(user_id):
 @app.route('/users/edit/<int:user_id>', methods=['POST'])
 @login_required
 def edit_user(user_id):
+    if current_user.username != 'admin' and current_user.id != user_id:
+        flash('Access denied', 'error')
+        return redirect(url_for('users'))
     user = User.query.get_or_404(user_id)
     # Only allow changing password and allowed devices (not username)
     new_password = request.form.get('password')
     selected_devices = request.form.getlist('devices')
-    if not selected_devices:
-        # default to all devices
-        selected_devices = [str(d.id) for d in Device.query.all()]
     user.allowed_devices = ','.join([d for d in selected_devices if d])
     if new_password:
         user.password = generate_password_hash(new_password)
@@ -459,7 +484,7 @@ def edit_user(user_id):
 @login_required
 def all_interfaces():
     import concurrent.futures
-    devices = Device.query.all()
+    devices = get_user_devices()
     
     def fetch_device_data(device):
         device_id = device.id
@@ -513,7 +538,7 @@ def system_logs():
 @app.route('/terminal')
 @login_required
 def terminal():
-    devices = Device.query.all()
+    devices = get_user_devices()
     selected_device_id = request.args.get('device_id', '')
     return render_template('terminal.html', devices=devices, selected_device_id=selected_device_id)
 
@@ -650,20 +675,8 @@ def handle_disconnect():
         session = active_shells.get(user_id)
         if session and sid in session['sids']:
             session['sids'].remove(sid)
-            # If no more active connections (sids is empty)
-            if not session['sids']:
-                # Start a 60-second delayed cleanup task
-                def delayed_cleanup(u_id):
-                    socketio.sleep(60)
-                    with active_shells_lock:
-                        sess = active_shells.get(u_id)
-                        # Double check that no clients have reconnected in the meantime
-                        if sess and not sess['sids']:
-                            close_terminal_shell(sess['client'], sess['shell'])
-                            if u_id in active_shells:
-                                del active_shells[u_id]
-                
-                socketio.start_background_task(delayed_cleanup, user_id)
+            # Sesi dipertahankan tanpa batas waktu (indefinitely) sampai pengguna
+            # secara eksplisit mengklik tombol Disconnect pada antarmuka terminal.
 
 # Handle explicit disconnect request from client UI
 @socketio.on('disconnect_terminal')
