@@ -349,7 +349,7 @@
                     </div>
                     <div>
                         <h1 class="text-white font-extrabold text-base tracking-tight">ParaMaster</h1>
-                        <p class="text-[9px] text-purple-400/50 font-bold uppercase tracking-[0.2em]">v0.6.7-Beta</p>
+                        <p class="text-[9px] text-purple-400/50 font-bold uppercase tracking-[0.2em]">v0.8.1-Beta</p>
                     </div>
                 </div>
             </div>
@@ -369,11 +369,6 @@
                     class="sidebar-item {{ 'active' if request.endpoint == 'batch_config' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
                     <i class="fas fa-microchip w-4 text-center text-xs"></i>
                     <span class="text-[11px] font-bold tracking-wide">Bulk Action</span>
-                </a>
-                <a href="{{ url_for('terminal') }}"
-                    class="sidebar-item {{ 'active' if request.endpoint == 'terminal' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
-                    <i class="fas fa-terminal w-4 text-center text-xs"></i>
-                    <span class="text-[11px] font-bold tracking-wide">Terminal</span>
                 </a>
                 <a href="{{ url_for('users') }}"
                     class="sidebar-item {{ 'active' if request.endpoint == 'users' }} flex items-center gap-3.5 px-5 py-3.5 rounded-xl">
@@ -463,14 +458,26 @@
         function openTerminal() {
             window.location.href = "/terminal";
         }
-        function refreshTerminalRestore() {
+        async function refreshTerminalRestore() {
             const restore = document.getElementById('terminal-restore');
             if (!restore) return;
-            const deviceId = localStorage.getItem('activeTerminalDeviceId');
-            if (deviceId) {
-                restore.style.display = 'inline-flex';
-            } else {
-                restore.style.display = 'none';
+            try {
+                const response = await fetch('/terminal/active-session-status');
+                const data = await response.json();
+                if (data.active) {
+                    localStorage.setItem('activeTerminalDeviceId', data.device_id);
+                    restore.style.display = 'inline-flex';
+                } else {
+                    localStorage.removeItem('activeTerminalDeviceId');
+                    restore.style.display = 'none';
+                }
+            } catch (e) {
+                const deviceId = localStorage.getItem('activeTerminalDeviceId');
+                if (deviceId) {
+                    restore.style.display = 'inline-flex';
+                } else {
+                    restore.style.display = 'none';
+                }
             }
         }
         function openTerminalRestore() {
@@ -509,6 +516,10 @@
         }
         
         document.addEventListener('DOMContentLoaded', function() {
+            const path = window.location.pathname;
+            if (path !== '/terminal' && path !== '/login' && path !== '/logout') {
+                localStorage.setItem('last_non_terminal_page', window.location.href);
+            }
             refreshTerminalRestore();
             const icon = document.getElementById('theme-toggle-icon');
             if (icon) {

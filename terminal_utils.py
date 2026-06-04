@@ -25,6 +25,10 @@ def connect_terminal_shell(ip, username, password, port=22, timeout=10):
         shell.send('\n')
         time.sleep(0.5)
         return True, 'Connected', client, shell
+    except paramiko.AuthenticationException:
+        return False, "Authentication failed - check username/password", None, None
+    except paramiko.SSHException as e:
+        return False, f"SSH error: {e}", None, None
     except Exception as e:
         if shell:
             try:

@@ -8,6 +8,16 @@ class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
+    # Comma-separated device IDs the user is allowed to configure (e.g. "1,2,3")
+    allowed_devices = db.Column(db.String(256), default='')
+
+    def get_allowed_device_ids(self):
+        if not self.allowed_devices:
+            return []
+        try:
+            return [int(x) for x in self.allowed_devices.split(',') if x.strip()]
+        except Exception:
+            return []
 
 class Device(db.Model):
     id = db.Column(db.Integer, primary_key=True)

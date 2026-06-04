@@ -94,12 +94,35 @@ class ParamikoUtils:
         finally:
             self.disconnect()
 
-    def add_ip_address(self, interface, ip_addr, mask):
-        """Add IP address to an interface."""
+    def add_ip_address(self, interface, ip_raw):
+        """Add IP address to an interface, handling CIDR notation."""
         success, msg = self.connect()
         if not success:
             return False, msg
 
+        ip_addr = ip_raw
+        mask = "255.255.255.0" # Default mask
+        if '/' in ip_raw:
+            try:
+                ip_addr, prefix = ip_raw.split('/')
+                prefix = int(prefix)
+                # Common subnet masks for quick lookup
+                masks = {
+                    8: "255.0.0.0",
+                    16: "255.255.0.0",
+                    24: "255.255.255.0",
+                    25: "255.255.255.128",
+                    26: "255.255.255.192",
+                    27: "255.255.255.224",
+                    28: "255.255.255.240",
+                    29: "255.255.255.248",
+                    30: "255.255.255.252",
+                    31: "255.255.255.254",
+                    32: "255.255.255.255",
+                }
+                mask = masks.get(prefix, mask) # Use default if prefix not in map
+            except ValueError: # Handle cases where prefix is not an integer
+                pass # Use default mask
         try:
             shell = self.client.invoke_shell()
             commands = [
@@ -234,10 +257,10 @@ def get_interfaces(ip, username, password, port=22):
     utils = ParamikoUtils(ip, username, password, port)
     return utils.get_interfaces()
 
-def add_ip_address(ip, username, password, port=22, interface='', ip_addr='', mask=''):
+def add_ip_address(ip, username, password, port=22, interface='', ip_raw=''):
     """Add IP address to interface."""
     utils = ParamikoUtils(ip, username, password, port)
-    return utils.add_ip_address(interface, ip_addr, mask)
+    return utils.add_ip_address(interface, ip_raw)
 
 def remove_ip_address(ip, username, password, port=22, interface='', ip_addr=None):
     """Remove IP address from interface."""

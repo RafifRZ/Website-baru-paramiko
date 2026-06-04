@@ -26,6 +26,7 @@
                         <th class="px-8 py-5">ID</th>
                         <th class="px-8 py-5">Username</th>
                         <th class="px-8 py-5">Role</th>
+                        <th class="px-8 py-5">Allowed Routers</th>
                         <th class="px-8 py-5 text-right">Actions</th>
                     </tr>
                 </thead>
@@ -44,9 +45,22 @@
                         <td class="px-8 py-5">
                             <span class="text-[10px] font-bold bg-indigo-500/10 text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider border border-indigo-500/20">Administrator</span>
                         </td>
+                        <td class="px-8 py-5 text-sm text-slate-300">
+                            {% set allowed_ids = user.get_allowed_device_ids() %}
+                            {% if allowed_ids %}
+                                {% for dev in devices if dev.id in allowed_ids %}
+                                    <span class="inline-block px-2 py-1 mr-1 mb-1 bg-white/5 rounded-md text-xs">{{ dev.hostname }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-xs text-slate-500 italic">All / None</span>
+                            {% endif %}
+                        </td>
                         <td class="px-8 py-5 text-right">
                             <div class="flex items-center justify-end gap-3 md:opacity-0 group-hover:opacity-100 transition-all duration-300">
                                 {% if user.username != 'admin' %}
+                                <button type="button" onclick="document.getElementById('editUserModal-{{ user.id }}').classList.remove('hidden')" class="text-slate-500 hover:text-sky-400 transition-all duration-200 p-1.5 hover:bg-white/5 rounded-lg">
+                                    <i class="fas fa-edit text-xs"></i>
+                                </button>
                                 <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" class="inline" onsubmit="return confirm('Hapus user ini?')">
                                     <button type="submit" class="text-slate-500 hover:text-rose-400 transition-all duration-200 p-1.5 hover:bg-rose-500/10 rounded-lg">
                                         <i class="fas fa-trash-alt text-xs"></i>
@@ -66,9 +80,9 @@
 </div>
 
 <!-- Modal for Add User -->
-<div id="addUserModal" class="fixed inset-0 modal-backdrop hidden flex items-center justify-center z-50 p-4">
-    <div class="modal-content w-full max-w-md rounded-[2.5rem] overflow-hidden animate-[fadeInUp_0.3s_ease-out]">
-        <div class="px-8 py-6 border-b border-white/5 flex justify-between items-center bg-white/1">
+<div id="addUserModal" class="fixed inset-0 modal-backdrop hidden flex items-center justify-center z-50 p-4 bg-black/40 backdrop-blur-sm">
+    <div class="modal-content w-full max-w-lg rounded-2xl bg-slate-900/85 shadow-2xl overflow-hidden animate-[fadeInUp_0.3s_ease-out] border border-white/5">
+        <div class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-slate-800/40">
             <h3 class="text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 <i class="fas fa-user-plus text-indigo-400"></i> New Administrator
             </h3>
@@ -77,14 +91,43 @@
             </button>
         </div>
         <form action="{{ url_for('add_user') }}" method="POST" class="p-8 space-y-6">
-            <div>
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Login Username</label>
-                <input type="text" name="username" class="w-full px-5 py-4 input-dark rounded-2xl text-sm font-semibold focus:outline-none" placeholder="e.g. jdoe" required>
+            <div class="mb-4">
+                <div class="flex gap-2">
+                    <button type="button" id="tab_account_btn" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm">Account</button>
+                    <button type="button" id="tab_routers_btn" class="px-4 py-2 rounded-xl bg-white/5 text-sm text-slate-300">Routers</button>
+                </div>
             </div>
-            <div>
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Security Password</label>
-                <input type="password" name="password" class="w-full px-5 py-4 input-dark rounded-2xl text-sm font-semibold focus:outline-none" placeholder="••••••••" required>
+
+            <div id="tab_account" class="tab-content">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Login Username</label>
+                    <input type="text" name="username" class="w-full px-5 py-4 input-dark rounded-2xl text-sm font-semibold focus:outline-none" placeholder="e.g. jdoe" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Security Password</label>
+                    <input type="password" name="password" class="w-full px-5 py-4 input-dark rounded-2xl text-sm font-semibold focus:outline-none" placeholder="••••••••" required>
+                </div>
             </div>
+
+            <div id="tab_routers" class="tab-content hidden">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Assign Routers</label>
+                <div class="mb-3">
+                    <label class="inline-flex items-center mr-4">
+                        <input type="checkbox" id="select_all_devices" class="form-checkbox h-4 w-4 text-indigo-500">
+                        <span class="ml-2 text-sm text-slate-300">Select All</span>
+                    </label>
+                    <p class="text-xs text-slate-400">(Default: if you leave this empty, user will have access to all devices)</p>
+                </div>
+                <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                    {% for device in devices %}
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+                        <input type="checkbox" name="devices" value="{{ device.id }}" class="device-checkbox form-checkbox h-4 w-4 text-indigo-500">
+                        {{ device.hostname }} ({{ device.ip_address }})
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
             <div class="pt-4">
                 <button type="submit" class="w-full py-4 btn-primary rounded-2xl transition-all flex items-center justify-center gap-2">
                     <i class="fas fa-plus"></i> Create Account
@@ -95,18 +138,159 @@
 </div>
 
 <script>
-    // Escape key closes modal
+    // Escape key closes add/edit modals
     window.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') {
-            document.getElementById('addUserModal').classList.add('hidden');
+            var addModal = document.getElementById('addUserModal');
+            if (addModal) addModal.classList.add('hidden');
+            // hide any edit modals
+            document.querySelectorAll('[id^="editUserModal-"]').forEach(function(m){ m.classList.add('hidden'); });
         }
     });
 
-    // Click on modal backdrop closes modal
-    document.getElementById('addUserModal').addEventListener('click', function (event) {
-        if (event.target === this) {
-            this.classList.add('hidden');
+    // Click on addUser modal backdrop closes modal
+    var addModalEl = document.getElementById('addUserModal');
+    if (addModalEl) {
+        addModalEl.addEventListener('click', function (event) {
+            if (event.target === this) {
+                this.classList.add('hidden');
+            }
+        });
+    }
+
+    // Select all checkbox behavior (add user modal)
+    var selectAllEl = document.getElementById('select_all_devices');
+    if (selectAllEl) {
+        selectAllEl.addEventListener('change', function (e) {
+            var check = e.target.checked;
+            document.querySelectorAll('.device-checkbox').forEach(function (el) { el.checked = check; });
+        });
+    }
+
+    // Tab switching (add user modal)
+    var tabAccountBtn = document.getElementById('tab_account_btn');
+    var tabRoutersBtn = document.getElementById('tab_routers_btn');
+    if (tabAccountBtn && tabRoutersBtn) {
+        tabAccountBtn.addEventListener('click', function () {
+            var acc = document.getElementById('tab_account');
+            var rou = document.getElementById('tab_routers');
+            if (acc && rou) {
+                acc.classList.remove('hidden');
+                rou.classList.add('hidden');
+                this.classList.add('bg-indigo-600', 'text-white');
+                tabRoutersBtn.classList.remove('bg-indigo-600', 'text-white');
+            }
+        });
+        tabRoutersBtn.addEventListener('click', function () {
+            var acc = document.getElementById('tab_account');
+            var rou = document.getElementById('tab_routers');
+            if (acc && rou) {
+                acc.classList.add('hidden');
+                rou.classList.remove('hidden');
+                this.classList.add('bg-indigo-600', 'text-white');
+                tabAccountBtn.classList.remove('bg-indigo-600', 'text-white');
+            }
+        });
+    }
+</script>
+{# Edit modals for each user (password + routers) #}
+{% for user in users %}
+<div id="editUserModal-{{ user.id }}" class="fixed inset-0 modal-backdrop hidden flex items-center justify-center z-50 p-4">
+    <div class="modal-content w-full max-w-lg rounded-2xl bg-slate-900/85 shadow-2xl overflow-hidden animate-[fadeInUp_0.3s_ease-out] border border-white/5">
+        <div class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-slate-800/40">
+            <h3 class="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                <i class="fas fa-user-edit text-indigo-400"></i> Edit Administrator
+            </h3>
+            <button onclick="document.getElementById('editUserModal-{{ user.id }}').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 transition-all p-1.5 hover:bg-white/5 rounded-lg">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form action="{{ url_for('edit_user', user_id=user.id) }}" method="POST" class="p-8 space-y-6">
+            <div class="mb-4">
+                <div class="flex gap-2">
+                    <button type="button" id="tab_account_btn_{{ user.id }}" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm">Account</button>
+                    <button type="button" id="tab_routers_btn_{{ user.id }}" class="px-4 py-2 rounded-xl bg-white/5 text-sm text-slate-300">Routers</button>
+                </div>
+            </div>
+
+            <div id="tab_account_{{ user.id }}" class="tab-content">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Login Username</label>
+                    <input type="text" name="username" value="{{ user.username }}" class="w-full px-5 py-4 input-dark rounded-2xl text-sm font-semibold focus:outline-none bg-white/5" disabled>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">New Password (leave blank to keep)</label>
+                    <input type="password" name="password" class="w-full px-5 py-4 input-dark rounded-2xl text-sm font-semibold focus:outline-none" placeholder="••••••••">
+                </div>
+            </div>
+
+            <div id="tab_routers_{{ user.id }}" class="tab-content hidden">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Assigned Routers</label>
+                <div class="mb-3">
+                    <label class="inline-flex items-center mr-4">
+                        <input type="checkbox" data-modal="{{ user.id }}" class="select-all-devices form-checkbox h-4 w-4 text-indigo-500">
+                        <span class="ml-2 text-sm text-slate-300">Select All</span>
+                    </label>
+                    <p class="text-xs text-slate-400">(Default: if you leave this empty, user will have access to all devices)</p>
+                </div>
+                <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                    {% set allowed_ids = user.get_allowed_device_ids() %}
+                    {% for device in devices %}
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+                        <input type="checkbox" name="devices" value="{{ device.id }}" class="device-checkbox-{{ user.id }} form-checkbox h-4 w-4 text-indigo-500" {% if device.id in allowed_ids %}checked{% endif %}>
+                        {{ device.hostname }} ({{ device.ip_address }})
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="pt-4">
+                <button type="submit" class="w-full py-4 btn-primary rounded-2xl transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+// Edit modals: tab switching and select-all per modal
+{% for user in users %}
+var tabAccBtn{{ user.id }} = document.getElementById('tab_account_btn_{{ user.id }}');
+var tabRouBtn{{ user.id }} = document.getElementById('tab_routers_btn_{{ user.id }}');
+if (tabAccBtn{{ user.id }} && tabRouBtn{{ user.id }}) {
+    tabAccBtn{{ user.id }}.addEventListener('click', function () {
+        var acc = document.getElementById('tab_account_{{ user.id }}');
+        var rou = document.getElementById('tab_routers_{{ user.id }}');
+        if (acc && rou) {
+            acc.classList.remove('hidden');
+            rou.classList.add('hidden');
+            this.classList.add('bg-indigo-600','text-white');
+            tabRouBtn{{ user.id }}.classList.remove('bg-indigo-600','text-white');
         }
     });
+    tabRouBtn{{ user.id }}.addEventListener('click', function () {
+        var acc = document.getElementById('tab_account_{{ user.id }}');
+        var rou = document.getElementById('tab_routers_{{ user.id }}');
+        if (acc && rou) {
+            acc.classList.add('hidden');
+            rou.classList.remove('hidden');
+            this.classList.add('bg-indigo-600','text-white');
+            tabAccBtn{{ user.id }}.classList.remove('bg-indigo-600','text-white');
+        }
+    });
+}
+
+var selectEls{{ user.id }} = document.querySelectorAll('.select-all-devices[data-modal="{{ user.id }}"]');
+if (selectEls{{ user.id }}.length) {
+    selectEls{{ user.id }}.forEach(function(el){
+        el.addEventListener('change', function(e){
+            var check = e.target.checked;
+            document.querySelectorAll('.device-checkbox-{{ user.id }}').forEach(function(cb){ cb.checked = check; });
+        });
+    });
+}
+{% endfor %}
 </script>
 {% endblock %}

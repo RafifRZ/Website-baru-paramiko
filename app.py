@@ -1,4 +1,5 @@
 import os
+import threading
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -22,6 +23,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+active_shells = {}
+active_shells_lock = threading.Lock()
 
 
 login_manager = LoginManager()
@@ -50,6 +53,15 @@ def ensure_device_port_column():
                 conn.execute(text("ALTER TABLE device ADD COLUMN port INTEGER DEFAULT 22"))
 
 
+def ensure_user_allowed_devices_column():
+    if db.engine.dialect.name == 'sqlite':
+        with db.engine.connect() as conn:
+            result = conn.execute(text("PRAGMA table_info(user)"))
+            columns = [row[1] for row in result]
+            if 'allowed_devices' not in columns:
+                conn.execute(text("ALTER TABLE user ADD COLUMN allowed_devices TEXT DEFAULT ''"))
+
+
 # Ensure database schema is prepared before handling requests.
 # We keep a simple flag to run the preparation only once.
 schema_prepared = False
@@ -68,9 +80,11 @@ def prepare_db_schema():
         return
     try:
         ensure_device_port_column()
+        ensure_user_allowed_devices_column()
     except OperationalError:
         db.create_all()
         ensure_device_port_column()
+        ensure_user_allowed_devices_column()
     schema_prepared = True
 
 # --- Routes ---
@@ -294,21 +308,12 @@ def configure_ip(device_id):
             flash('Masukkan IP address sebelum menambahkan IP.', 'error')
             return redirect(url_for('device_detail', device_id=device_id))
 
-        ip = ip_raw
-        mask = "255.255.255.0"
-        if '/' in ip_raw:
-            parts = ip_raw.split('/')
-            ip = parts[0]
-            try:
-                prefix = int(parts[1])
-            except ValueError:
-                prefix = 24
-            masks = {24: "255.255.255.0", 30: "255.255.255.252", 32: "255.255.255.255", 16: "255.255.0.0", 8: "255.0.0.0"}
-            mask = masks.get(prefix, "255.255.255.0")
-        
-        success, msg = add_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip, mask)
+        success, msg = add_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip_raw)
     elif action == 'Remove IP':
-        success, msg = remove_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface)
+        if not ip_raw:
+            flash('Masukkan IP address sebelum menghapus IP.', 'error')
+            return redirect(url_for('device_detail', device_id=device_id))
+        success, msg = remove_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip_raw)
     elif action == 'No Shutdown':
         success, msg = no_shutdown_interface(device.ip_address, device.username, device.password, device.port or 22, interface)
     else:
@@ -390,6 +395,8 @@ def batch_config():
 @login_required
 def users():
     users_list = User.query.all()
+    devices = Device.query.all()
+    return render_template('users.html', users=users_list, devices=devices)
     return render_template('users.html', users=users_list)
 
 @app.route('/users/add', methods=['POST'])
@@ -398,10 +405,17 @@ def add_user():
     username = request.form.get('username')
     password = request.form.get('password')
     
+    # Get selected device IDs (checkboxes named 'devices')
+    selected_devices = request.form.getlist('devices')
+    # If none selected, default to all devices
+    if not selected_devices:
+        selected_devices = [str(d.id) for d in Device.query.all()]
+    allowed_devices_str = ','.join([d for d in selected_devices if d])
+    
     if User.query.filter_by(username=username).first():
         flash('Username already exists', 'error')
     else:
-        new_user = User(username=username, password=generate_password_hash(password))
+        new_user = User(username=username, password=generate_password_hash(password), allowed_devices=allowed_devices_str)
         db.session.add(new_user)
         db.session.commit()
         log_action(f"Created new system user: {username}")
@@ -420,6 +434,25 @@ def delete_user(user_id):
         db.session.commit()
         log_action(f"Deleted system user: {username}")
         flash('User removed', 'success')
+    return redirect(url_for('users'))
+
+
+@app.route('/users/edit/<int:user_id>', methods=['POST'])
+@login_required
+def edit_user(user_id):
+    user = User.query.get_or_404(user_id)
+    # Only allow changing password and allowed devices (not username)
+    new_password = request.form.get('password')
+    selected_devices = request.form.getlist('devices')
+    if not selected_devices:
+        # default to all devices
+        selected_devices = [str(d.id) for d in Device.query.all()]
+    user.allowed_devices = ','.join([d for d in selected_devices if d])
+    if new_password:
+        user.password = generate_password_hash(new_password)
+    db.session.commit()
+    log_action(f"Updated system user: {user.username}")
+    flash('User updated successfully', 'success')
     return redirect(url_for('users'))
 
 @app.route('/interfaces')
@@ -486,17 +519,55 @@ def terminal():
 
 # --- Terminal (SocketIO) ---
 
-active_shells = {}
+@app.route('/terminal/active-session-status')
+@login_required
+def active_session_status():
+    user_id = current_user.id
+    with active_shells_lock:
+        session = active_shells.get(user_id)
+        if session and session['shell'] and not session['shell'].closed:
+            return jsonify({
+                'active': True,
+                'device_id': session['device_id']
+            })
+    return jsonify({'active': False})
 
 @socketio.on('connect_terminal')
 def handle_terminal_connect(data):
     device_id = data.get('device_id')
+    if device_id is not None:
+        device_id = str(device_id)
     sid = request.sid
+
+    if not current_user.is_authenticated:
+        emit('terminal_output', {'data': 'Authentication required\n'})
+        return
+
+    user_id = current_user.id
     device = Device.query.get(device_id)
 
     if not device:
         emit('terminal_output', {'data': 'Device not found\n'})
         return
+
+    with active_shells_lock:
+        # Check if there is an existing session for this user
+        session = active_shells.get(user_id)
+        if session:
+            # If it's the same device and shell is active
+            if str(session['device_id']) == device_id and session['shell'] and not session['shell'].closed:
+                # Add new sid to the set of tracking sids
+                session['sids'].add(sid)
+                
+                # Emit connection confirmation and the accumulated output buffer
+                emit('terminal_output', {'data': '\n[Reconnected to existing session]\n\n'}, room=sid)
+                emit('terminal_output', {'data': session['output_buffer']}, room=sid)
+                return
+            else:
+                # Close the old session
+                close_terminal_shell(session['client'], session['shell'])
+                if user_id in active_shells:
+                    del active_shells[user_id]
 
     success, msg, client, shell = connect_terminal_shell(
         device.ip_address,
@@ -509,51 +580,103 @@ def handle_terminal_connect(data):
         emit('terminal_output', {'data': f'Connection failed: {msg}\n'})
         return
 
-    active_shells[sid] = {'shell': shell, 'client': client}
+    with active_shells_lock:
+        active_shells[user_id] = {
+            'shell': shell,
+            'client': client,
+            'device_id': device_id,
+            'output_buffer': '',
+            'sids': {sid}
+        }
+
     initial_output = read_shell_output(shell, 0.5)
     if initial_output:
+        with active_shells_lock:
+            if user_id in active_shells:
+                active_shells[user_id]['output_buffer'] += initial_output
         emit('terminal_output', {'data': initial_output}, room=sid)
 
-    def background_thread(session_id):
-        while session_id in active_shells:
-            sh = active_shells[session_id]['shell']
-            if sh.recv_ready():
-                try:
+    def background_thread(u_id):
+        while True:
+            with active_shells_lock:
+                if u_id not in active_shells:
+                    break
+                session_info = active_shells[u_id]
+                sh = session_info['shell']
+                sids = list(session_info['sids'])
+            
+            try:
+                if sh.recv_ready():
                     output = sh.recv(4096).decode('utf-8', errors='ignore')
                     if output:
-                        socketio.emit('terminal_output', {'data': output}, room=session_id)
-                except Exception:
-                    break
+                        with active_shells_lock:
+                            if u_id in active_shells:
+                                active_shells[u_id]['output_buffer'] += output
+                        # Emit output to all connected SIDs of this user
+                        for s in sids:
+                            socketio.emit('terminal_output', {'data': output}, room=s)
+            except Exception:
+                break
             socketio.sleep(0.1)
 
-    socketio.start_background_task(background_thread, sid)
+    socketio.start_background_task(background_thread, user_id)
 
 @socketio.on('terminal_input')
 def handle_terminal_input(data):
     sid = request.sid
     input_text = data.get('data')
-    if sid in active_shells and input_text:
-        shell = active_shells[sid]['shell']
-        if not input_text.endswith('\n'):
-            input_text += '\n'
-        success, err = send_shell_command(shell, input_text)
-        if not success:
-            emit('terminal_output', {'data': f'Error sending command: {err}\n'}, room=sid)
+    if not current_user.is_authenticated:
+        return
+    user_id = current_user.id
+    
+    with active_shells_lock:
+        session = active_shells.get(user_id)
+        if session and sid in session['sids'] and input_text:
+            shell = session['shell']
+            if not input_text.endswith('\n'):
+                input_text += '\n'
+            success, err = send_shell_command(shell, input_text)
+            if not success:
+                emit('terminal_output', {'data': f'Error sending command: {err}\n'}, room=sid)
 
 @socketio.on('disconnect')
 def handle_disconnect():
     sid = request.sid
-    if sid in active_shells:
-        close_terminal_shell(active_shells[sid]['client'], active_shells[sid]['shell'])
-        del active_shells[sid]
+    if not current_user.is_authenticated:
+        return
+    user_id = current_user.id
+    
+    with active_shells_lock:
+        session = active_shells.get(user_id)
+        if session and sid in session['sids']:
+            session['sids'].remove(sid)
+            # If no more active connections (sids is empty)
+            if not session['sids']:
+                # Start a 60-second delayed cleanup task
+                def delayed_cleanup(u_id):
+                    socketio.sleep(60)
+                    with active_shells_lock:
+                        sess = active_shells.get(u_id)
+                        # Double check that no clients have reconnected in the meantime
+                        if sess and not sess['sids']:
+                            close_terminal_shell(sess['client'], sess['shell'])
+                            if u_id in active_shells:
+                                del active_shells[u_id]
+                
+                socketio.start_background_task(delayed_cleanup, user_id)
 
 # Handle explicit disconnect request from client UI
 @socketio.on('disconnect_terminal')
 def handle_disconnect_terminal():
-    sid = request.sid
-    if sid in active_shells:
-        close_terminal_shell(active_shells[sid]['client'], active_shells[sid]['shell'])
-        del active_shells[sid]
+    if not current_user.is_authenticated:
+        return
+    user_id = current_user.id
+    with active_shells_lock:
+        session = active_shells.get(user_id)
+        if session:
+            close_terminal_shell(session['client'], session['shell'])
+            if user_id in active_shells:
+                del active_shells[user_id]
 
 # --- Init Database ---
 

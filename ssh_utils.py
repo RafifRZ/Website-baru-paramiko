@@ -19,7 +19,7 @@ class SSHManager:
                 port=self.port,
                 username=self.username,
                 password=self.password,
-                timeout=10,
+                timeout=20, # Increased timeout for slower devices
                 look_for_keys=False,
                 allow_agent=False
             )
@@ -41,23 +41,24 @@ class SSHManager:
             return None, str(e)
 
     def check_interfaces_shell(self):
+        """Retrieve interface information using an interactive shell."""
         if not self.client:
             return None, "Not connected"
 
-        output, err = self.execute_command('terminal length 0\nshow ip interface brief')
-        if err or not output or not output.strip():
-            try:
-                shell = self.client.invoke_shell()
-                time.sleep(0.5)
-                shell.send('terminal length 0\n')
-                shell.send('show ip interface brief\n')
-                time.sleep(1.5)
-                output = shell.recv(65535).decode('utf-8', errors='ignore')
-                return output, None
-            except Exception as e:
-                return None, str(e)
-
-        return output, None
+        try:
+            shell = self.client.invoke_shell()
+            time.sleep(0.5)
+            shell.send('terminal length 0\n')
+            time.sleep(0.5)
+            shell.send('show ip interface brief\n')
+            time.sleep(1.5)
+            output = ''
+            while shell.recv_ready():
+                output += shell.recv(65535).decode('utf-8', errors='ignore')
+            shell.close()
+            return output, None
+        except Exception as e:
+            return None, str(e)
 
     def get_router_info(self):
         commands = {

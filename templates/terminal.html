@@ -44,7 +44,7 @@
                 <button id="terminal-disconnect" onclick="disconnectTerminal()" class="hidden text-rose-400 hover:text-rose-300 text-[10px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all">
                     Disconnect
                 </button>
-                <button id="terminal-minimize" onclick="toggleTerminal()" class="text-slate-400 hover:text-white text-xs uppercase tracking-widest font-black px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all">
+                <button id="terminal-minimize" onclick="minimizeTerminal()" class="text-slate-400 hover:text-white text-xs uppercase tracking-widest font-black px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all">
                     <i class="fas fa-window-minimize"></i>
                 </button>
             </div>
@@ -128,12 +128,9 @@
         statusText.innerText = 'Connecting...';
     }
 
-    function toggleTerminal() {
-        const panel = document.getElementById('terminal-panel');
-        const button = document.getElementById('terminal-minimize');
-        if (!panel) return;
-        panel.classList.toggle('hidden');
-        button.innerHTML = panel.classList.contains('hidden') ? '<i class="fas fa-square-plus"></i>' : '<i class="fas fa-window-minimize"></i>';
+    function minimizeTerminal() {
+        const lastPage = localStorage.getItem('last_non_terminal_page');
+        window.location.href = lastPage ? lastPage : '/';
     }
 
     outputArea.addEventListener('scroll', function () {
@@ -206,6 +203,9 @@
             localStorage.removeItem('activeTerminalDeviceId');
             document.getElementById('terminal-disconnect').classList.add('hidden');
         } else {
+            if (msg.data.includes('[Reconnected to existing session]')) {
+                outputArea.innerHTML = ''; // Clear default greeting on reconnect!
+            }
             appendToTerminal(msg.data);
             if (statusText.innerText !== 'Connected') {
                 statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
@@ -235,6 +235,11 @@
         }
     }
 
+    // Auto-cleanup on tab close or refresh - handled by server-side SocketIO disconnect event
+    window.addEventListener('beforeunload', function() {
+        // Do not explicitly disconnect terminal to allow session survival on refresh/page navigation
+    });
+
     document.addEventListener('DOMContentLoaded', function() {
         const disconnectBtn = document.getElementById('terminal-disconnect');
         const restoreBtn = document.getElementById('terminal-restore');
@@ -245,7 +250,10 @@
         }
 
         const params = new URLSearchParams(window.location.search);
-        const selectedId = params.get('device_id') || "{{ selected_device_id | default('') }}";
+        let selectedId = params.get('device_id') || "{{ selected_device_id | default('') }}";
+        if (!selectedId) {
+            selectedId = localStorage.getItem('activeTerminalDeviceId');
+        }
         if (selectedId) {
             deviceSelect.value = selectedId;
             connectTerminal();
