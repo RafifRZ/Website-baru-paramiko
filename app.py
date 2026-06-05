@@ -6,7 +6,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Device, Log
-from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address, no_shutdown_interface, get_device_hostname
+from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address, no_shutdown_interface, get_device_hostname, show_version, show_running_config
 from ssh_utils import run_batch_config
 from terminal_utils import connect_terminal_shell, read_shell_output, send_shell_command, close_terminal_shell
 import pandas as pd
@@ -103,7 +103,7 @@ def dashboard():
     devices = get_user_devices()
     stats = {
         'total': len(devices),
-        'online': Device.query.filter_by(status='Online').count(),
+        'online': sum(1 for d in devices if d.status == 'Online'),
     }
     return render_template('dashboard.html', devices=devices, stats=stats)
 

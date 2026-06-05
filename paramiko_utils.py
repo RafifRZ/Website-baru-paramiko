@@ -30,7 +30,7 @@ class ParamikoUtils:
                 port=self.port,
                 username=self.username,
                 password=self.password,
-                timeout=20,
+                timeout=15,
                 look_for_keys=False,
                 allow_agent=False,
             )
@@ -276,3 +276,34 @@ def get_device_hostname(ip, username, password, port=22):
     """Retrieve the hostname from a router."""
     utils = ParamikoUtils(ip, username, password, port)
     return utils.get_hostname()
+
+# New helper to run arbitrary CLI commands and specific show commands
+import time
+
+def run_cli_command(ip, username, password, port=22, command=''):
+    """Execute arbitrary CLI command on router and return output."""
+    utils = ParamikoUtils(ip, username, password, port)
+    success, msg = utils.connect()
+    if not success:
+        return False, msg
+    try:
+        shell = utils.client.invoke_shell()
+        shell.send(command + '\n')
+        time.sleep(2)
+        output = ''
+        while shell.recv_ready():
+            output += shell.recv(1024).decode('utf-8', errors='ignore')
+        shell.close()
+        return True, output
+    except Exception as e:
+        return False, str(e)
+    finally:
+        utils.disconnect()
+
+def show_version(ip, username, password, port=22):
+    """Run 'show version' on device."""
+    return run_cli_command(ip, username, password, port, 'show version')
+
+def show_running_config(ip, username, password, port=22):
+    """Run 'show running-config' on device."""
+    return run_cli_command(ip, username, password, port, 'show running-config')

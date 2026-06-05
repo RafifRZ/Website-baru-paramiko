@@ -19,7 +19,7 @@ class SSHManager:
                 port=self.port,
                 username=self.username,
                 password=self.password,
-                timeout=20, # Increased timeout for slower devices
+                timeout=15, # Increased timeout for slower devices
                 look_for_keys=False,
                 allow_agent=False
             )
