@@ -1,12 +1,13 @@
 import os
 import threading
+import re
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Device, Log
-from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address, no_shutdown_interface, get_device_hostname, show_version, show_running_config
+from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address, no_shutdown_interface, shutdown_interface, get_device_hostname, show_version, show_running_config, run_cli_command
 from ssh_utils import run_batch_config
 from terminal_utils import connect_terminal_shell, read_shell_output, send_shell_command, close_terminal_shell
 import pandas as pd
@@ -50,6 +51,42 @@ def log_action(action, level='INFO', device_id=None):
     new_log = Log(action=action, level=level, device_id=device_id, user_id=user_id, timestamp=timestamp)
     db.session.add(new_log)
     db.session.commit()
+
+
+def parse_version_summary(version_output):
+    """Extract a small, readable summary from `show version` output."""
+    summary = {
+        'ios_version': None,
+        'uptime': None,
+        'system_image': None,
+        'serial_number': None,
+    }
+
+    if not version_output:
+        return summary
+
+    for line in version_output.splitlines():
+        clean = line.strip()
+        if not clean:
+            continue
+        if summary['uptime'] is None:
+            uptime_match = re.search(r'(.+?) uptime is (.+)', clean, re.IGNORECASE)
+            if uptime_match:
+                summary['uptime'] = uptime_match.group(2).strip()
+        if summary['ios_version'] is None and 'Cisco IOS Software' in clean:
+            version_match = re.search(r'Version ([^,\s]+)', clean, re.IGNORECASE)
+            if version_match:
+                summary['ios_version'] = version_match.group(1)
+        if summary['system_image'] is None and 'System image file is' in clean:
+            image_match = re.search(r'"([^"]+)"', clean)
+            if image_match:
+                summary['system_image'] = image_match.group(1)
+        if summary['serial_number'] is None and 'Processor board ID' in clean:
+            serial_match = re.search(r'Processor board ID\s+(.+)', clean, re.IGNORECASE)
+            if serial_match:
+                summary['serial_number'] = serial_match.group(1).strip()
+
+    return summary
 
 
 def ensure_device_port_column():
@@ -301,7 +338,16 @@ def device_detail(device_id):
         if device.status != 'Offline':
             device.status = 'Offline'
             db.session.commit()
-        return render_template('device_detail.html', device=device, error=msg, interfaces=[], interface_count=0)
+        device_info = {
+            'hostname': device.hostname,
+            'ip_address': device.ip_address,
+            'port': device.port or 22,
+            'username': device.username,
+            'device_type': device.device_type or 'cisco_ios',
+            'status': device.status,
+            'created_at': device.created_at,
+        }
+        return render_template('device_detail.html', device=device, error=msg, interfaces=[], interface_count=0, device_info=device_info, version_info={})
 
     if device.status != 'Online':
         device.status = 'Online'
@@ -309,8 +355,51 @@ def device_detail(device_id):
 
     interfaces = get_interfaces(device.ip_address, device.username, device.password, device.port or 22)
     interface_count = len(interfaces)
+    version_success, version_output = show_version(device.ip_address, device.username, device.password, device.port or 22)
+    version_info = parse_version_summary(version_output if version_success else '')
 
-    return render_template('device_detail.html', device=device, interfaces=interfaces, interface_count=interface_count)
+    device_info = {
+        'hostname': device.hostname,
+        'ip_address': device.ip_address,
+        'port': device.port or 22,
+        'username': device.username,
+        'device_type': device.device_type or 'cisco_ios',
+        'status': device.status,
+        'created_at': device.created_at,
+    }
+
+    return render_template(
+        'device_detail.html',
+        device=device,
+        interfaces=interfaces,
+        interface_count=interface_count,
+        device_info=device_info,
+        version_info=version_info,
+    )
+
+@app.route('/device/<int:device_id>/command', methods=['POST'])
+@login_required
+def device_command(device_id):
+    if current_user.username != 'admin' and device_id not in current_user.get_allowed_device_ids():
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+    device = Device.query.get_or_404(device_id)
+    payload = request.get_json(silent=True) or {}
+    command = (payload.get('command') or '').strip()
+
+    if command == 'show ip interface brief':
+        success, output = run_cli_command(device.ip_address, device.username, device.password, device.port or 22, 'show ip interface brief')
+    elif command == 'show version':
+        success, output = show_version(device.ip_address, device.username, device.password, device.port or 22)
+    elif command == 'show running-config':
+        success, output = show_running_config(device.ip_address, device.username, device.password, device.port or 22)
+    else:
+        return jsonify({'success': False, 'message': 'Command not allowed'}), 400
+
+    if not success:
+        return jsonify({'success': False, 'message': output}), 200
+
+    return jsonify({'success': True, 'output': output})
 
 @app.route('/device/<int:device_id>/configure_ip', methods=['POST'])
 @login_required
@@ -330,12 +419,11 @@ def configure_ip(device_id):
 
         success, msg = add_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip_raw)
     elif action == 'Remove IP':
-        if not ip_raw:
-            flash('Masukkan IP address sebelum menghapus IP.', 'error')
-            return redirect(url_for('device_detail', device_id=device_id))
         success, msg = remove_ip_address(device.ip_address, device.username, device.password, device.port or 22, interface, ip_raw)
     elif action == 'No Shutdown':
         success, msg = no_shutdown_interface(device.ip_address, device.username, device.password, device.port or 22, interface)
+    elif action == 'Shutdown':
+        success, msg = shutdown_interface(device.ip_address, device.username, device.password, device.port or 22, interface)
     else:
         flash('Action tidak valid.', 'error')
         return redirect(url_for('device_detail', device_id=device_id))

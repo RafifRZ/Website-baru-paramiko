@@ -194,6 +194,31 @@ class ParamikoUtils:
         finally:
             self.disconnect()
 
+    def shutdown_interface(self, interface):
+        """Disable an interface (shutdown)."""
+        success, msg = self.connect()
+        if not success:
+            return False, msg
+
+        try:
+            shell = self.client.invoke_shell()
+            commands = [
+                f'configure terminal\n',
+                f'interface {interface}\n',
+                'shutdown\n',
+                'end\n',
+                'write memory\n'
+            ]
+            for cmd in commands:
+                shell.send(cmd)
+                time.sleep(1)
+            shell.close()
+            return True, "Interface disabled successfully"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            self.disconnect()
+
     def get_hostname(self):
         """Retrieve the hostname from the router by parsing CLI prompt or running show running-config."""
         success, msg = self.connect()
@@ -272,6 +297,11 @@ def no_shutdown_interface(ip, username, password, port=22, interface=''):
     utils = ParamikoUtils(ip, username, password, port)
     return utils.no_shutdown_interface(interface)
 
+def shutdown_interface(ip, username, password, port=22, interface=''):
+    """Disable interface."""
+    utils = ParamikoUtils(ip, username, password, port)
+    return utils.shutdown_interface(interface)
+
 def get_device_hostname(ip, username, password, port=22):
     """Retrieve the hostname from a router."""
     utils = ParamikoUtils(ip, username, password, port)
@@ -288,11 +318,22 @@ def run_cli_command(ip, username, password, port=22, command=''):
         return False, msg
     try:
         shell = utils.client.invoke_shell()
+        shell.send('terminal length 0\n')
+        time.sleep(0.5)
+        shell.send('terminal width 512\n')
+        time.sleep(0.2)
         shell.send(command + '\n')
-        time.sleep(2)
         output = ''
-        while shell.recv_ready():
-            output += shell.recv(1024).decode('utf-8', errors='ignore')
+        last_data_at = time.time()
+        timeout_at = time.time() + 8
+        while time.time() < timeout_at:
+            if shell.recv_ready():
+                output += shell.recv(4096).decode('utf-8', errors='ignore')
+                last_data_at = time.time()
+            elif time.time() - last_data_at > 1.0:
+                break
+            else:
+                time.sleep(0.2)
         shell.close()
         return True, output
     except Exception as e:
@@ -306,4 +347,4 @@ def show_version(ip, username, password, port=22):
 
 def show_running_config(ip, username, password, port=22):
     """Run 'show running-config' on device."""
-    return run_cli_command(ip, username, password, port, 'show running-config')
+    return run_cli_command(ip, username, password, port, 'show running-config')
