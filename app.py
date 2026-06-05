@@ -165,6 +165,11 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+
+@app.errorhandler(404)
+def page_not_found(error):
+    return render_template('404.html'), 404
+
 @app.route('/devices/verify', methods=['POST'])
 @login_required
 def verify_device():

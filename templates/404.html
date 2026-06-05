@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Page Not Found | ParaMaster</title>
+    <meta name="description" content="Custom 404 page for ParaMaster network management dashboard.">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') {
+                document.documentElement.classList.add('light');
+            }
+        })();
+    </script>
+    <style>
+        :root {
+            --bg-primary: #111827;
+            --bg-surface: rgba(255, 255, 255, 0.04);
+            --bg-surface-strong: rgba(255, 255, 255, 0.06);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #e5e7eb;
+            --text-secondary: #94a3b8;
+            --accent: #8b5cf6;
+            --accent-2: #6366f1;
+        }
+
+        .light {
+            --bg-primary: #f8fafc;
+            --bg-surface: rgba(255, 255, 255, 0.9);
+            --bg-surface-strong: #ffffff;
+            --border-color: rgba(15, 23, 42, 0.08);
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --accent: #6366f1;
+            --accent-2: #8b5cf6;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 30%),
+                radial-gradient(circle at right center, rgba(139, 92, 246, 0.16), transparent 28%),
+                linear-gradient(180deg, var(--bg-primary), #0b1020 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        .light body {
+            background:
+                radial-gradient(circle at top left, rgba(99, 102, 241, 0.12), transparent 30%),
+                radial-gradient(circle at right center, rgba(139, 92, 246, 0.10), transparent 28%),
+                linear-gradient(180deg, var(--bg-primary), #eef2ff 100%);
+        }
+
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+            background-size: 64px 64px;
+            mask-image: radial-gradient(circle at center, black, transparent 75%);
+            pointer-events: none;
+        }
+
+        .glow-orb {
+            position: absolute;
+            width: 22rem;
+            height: 22rem;
+            border-radius: 9999px;
+            filter: blur(48px);
+            opacity: 0.35;
+            pointer-events: none;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        .orb-one {
+            top: -6rem;
+            left: -5rem;
+            background: rgba(99, 102, 241, 0.35);
+        }
+
+        .orb-two {
+            right: -5rem;
+            bottom: -7rem;
+            background: rgba(139, 92, 246, 0.28);
+            animation-delay: -2.5s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-18px) scale(1.03); }
+        }
+
+        @keyframes pulseSoft {
+            0%, 100% { transform: scale(1); opacity: 0.92; }
+            50% { transform: scale(1.04); opacity: 1; }
+        }
+
+        .panel {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+        }
+
+        .panel-strong {
+            background: var(--bg-surface-strong);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 30px 80px rgba(2, 6, 23, 0.4);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-2), var(--accent));
+            box-shadow: 0 14px 40px rgba(99, 102, 241, 0.28);
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 18px 50px rgba(99, 102, 241, 0.36);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(139, 92, 246, 0.28);
+        }
+
+        .error-number {
+            text-shadow: 0 0 32px rgba(99, 102, 241, 0.22);
+            animation: pulseSoft 3.5s ease-in-out infinite;
+        }
+
+        .soft-chip {
+            background: rgba(99, 102, 241, 0.10);
+            border: 1px solid rgba(99, 102, 241, 0.14);
+            color: #c7d2fe;
+        }
+
+        .light .soft-chip {
+            color: #4338ca;
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        .light .btn-secondary:hover {
+            background: rgba(99, 102, 241, 0.04);
+        }
+
+        @media (max-height: 820px) {
+            body {
+                min-height: 100dvh;
+            }
+
+            main {
+                padding-top: 1rem !important;
+                padding-bottom: 1rem !important;
+            }
+
+            .panel-strong {
+                border-radius: 1.5rem;
+            }
+
+            .error-number {
+                font-size: clamp(3.5rem, 8vw, 5.5rem);
+            }
+        }
+
+        @media (max-height: 700px) {
+            main {
+                padding-top: 0.75rem !important;
+                padding-bottom: 0.75rem !important;
+            }
+
+            .panel-strong .p-6,
+            .panel-strong .p-8,
+            .panel-strong .p-10,
+            .panel-strong .p-12 {
+                padding-top: 1rem !important;
+                padding-bottom: 1rem !important;
+            }
+
+            .space-y-4,
+            .space-y-5 {
+                gap: 0.75rem !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="relative">
+    <div class="grid-overlay"></div>
+    <div class="glow-orb orb-one"></div>
+    <div class="glow-orb orb-two"></div>
+
+    <main class="relative z-10 min-h-[100dvh] flex items-start md:items-center justify-center px-4 sm:px-6 py-4 sm:py-6 lg:py-8">
+        <section class="panel-strong w-full max-w-4xl rounded-3xl overflow-hidden my-auto">
+            <div class="grid md:grid-cols-2">
+                <div class="p-6 sm:p-8 md:p-10 lg:p-12 flex flex-col justify-between gap-6 sm:gap-8">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+                            <i class="fas fa-layer-group text-white"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs uppercase tracking-[0.25em] text-[color:var(--text-secondary)] font-extrabold">ParaMaster</p>
+                            <p class="text-sm text-[color:var(--text-secondary)]">Network Config Tools</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 sm:space-y-5">
+                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-[0.22em] soft-chip">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            Route missing
+                        </span>
+                        <div class="space-y-3">
+                            <h1 class="error-number text-6xl sm:text-7xl lg:text-8xl font-black leading-none">404</h1>
+                            <h2 class="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">Halaman ini tidak ditemukan.</h2>
+                            <p class="text-sm sm:text-base text-[color:var(--text-secondary)] leading-relaxed max-w-md">
+                                Tautan yang kamu buka mungkin sudah dipindahkan, dihapus, atau salah ketik.
+                                Kamu bisa kembali ke dashboard atau gunakan Navigation Hints.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-3 pt-1 sm:pt-2">
+                        {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('dashboard') }}" class="btn-primary inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white">
+                            <i class="fas fa-house"></i>
+                            Back to Dashboard
+                        </a>
+                        {% else %}
+                        <a href="{{ url_for('login') }}" class="btn-primary inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white">
+                            <i class="fas fa-right-to-bracket"></i>
+                            Go to Login
+                        </a>
+                        {% endif %}
+                        <button onclick="history.back()" class="btn-secondary inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold">
+                            <i class="fas fa-arrow-left"></i>
+                            Go Back
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-6 sm:p-8 md:p-10 lg:p-12 flex items-center justify-center border-t md:border-t-0 md:border-l" style="border-color: var(--border-color);">
+                    <div class="w-full max-w-sm space-y-4 sm:space-y-5">
+                        <div class="panel rounded-2xl p-4 sm:p-5">
+                            <div class="flex items-center justify-between mb-4">
+                                <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-[color:var(--text-secondary)]">Navigation hints</p>
+                                <i class="fas fa-compass text-indigo-400"></i>
+                            </div>
+                            <div class="space-y-2.5 text-sm">
+                                <a href="{{ url_for('dashboard') }}" class="flex items-center justify-between rounded-xl px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors">
+                                    <span class="flex items-center gap-3">
+                                        <i class="fas fa-tower-broadcast text-indigo-400 w-4 text-center"></i>
+                                        Devices
+                                    </span>
+                                    <i class="fas fa-chevron-right text-[10px] text-[color:var(--text-secondary)]"></i>
+                                </a>
+                                <a href="{{ url_for('all_interfaces') }}" class="flex items-center justify-between rounded-xl px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors">
+                                    <span class="flex items-center gap-3">
+                                        <i class="fas fa-network-wired text-cyan-400 w-4 text-center"></i>
+                                        Interfaces
+                                    </span>
+                                    <i class="fas fa-chevron-right text-[10px] text-[color:var(--text-secondary)]"></i>
+                                </a>
+                                <a href="{{ url_for('system_logs') }}" class="flex items-center justify-between rounded-xl px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors">
+                                    <span class="flex items-center gap-3">
+                                        <i class="fas fa-scroll text-emerald-400 w-4 text-center"></i>
+                                        System Logs
+                                    </span>
+                                    <i class="fas fa-chevron-right text-[10px] text-[color:var(--text-secondary)]"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+
+</html>
