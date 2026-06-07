@@ -7,3 +7,4 @@ python-dotenv
 eventlet
 pandas
 pytz
+cryptography

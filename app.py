@@ -1,7 +1,7 @@
 import os
 import threading
 import re
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, Response, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit
@@ -10,6 +10,8 @@ from models import db, User, Device, Log
 from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address, no_shutdown_interface, shutdown_interface, get_device_hostname, show_version, show_running_config, run_cli_command
 from ssh_utils import run_batch_config
 from terminal_utils import connect_terminal_shell, read_shell_output, send_shell_command, close_terminal_shell
+from crypto_utils import encrypt_password, decrypt_password
+import csv
 import pandas as pd
 import io
 from datetime import datetime
@@ -238,6 +240,145 @@ def add_device():
     flash('Device registered successfully', 'success')
     return redirect(url_for('dashboard'))
 
+@app.route('/devices/export')
+@login_required
+def export_devices():
+    """Stream a CSV of the current user's devices with the password column
+    encrypted using the local Fernet key."""
+    devices = get_user_devices()
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(['hostname', 'ip_address', 'port', 'username', 'password', 'device_type'])
+    for d in devices:
+        writer.writerow([
+            d.hostname or '',
+            d.ip_address or '',
+            d.port or 22,
+            d.username or '',
+            encrypt_password(d.password or ''),
+            d.device_type or 'cisco_ios',
+        ])
+
+    log_action(f"Exported {len(devices)} device(s) to CSV")
+    timestamp = datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%Y%m%d-%H%M%S')
+    filename = f'devices-{timestamp}.csv'
+
+    response = Response(buffer.getvalue(), mimetype='text/csv; charset=utf-8')
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@app.route('/devices/import', methods=['POST'])
+@login_required
+def import_devices():
+    """Import devices from a CSV file. The password column is expected to be
+    encrypted with the same Fernet key used by /devices/export, but plaintext
+    passwords are accepted as a fallback."""
+    csv_file = request.files.get('csv_file')
+    if not csv_file or not csv_file.filename:
+        flash('Pilih file CSV terlebih dahulu.', 'error')
+        return redirect(url_for('dashboard'))
+
+    try:
+        text_stream = io.StringIO(csv_file.read().decode('utf-8-sig'))
+    except UnicodeDecodeError:
+        flash('Format file tidak valid. Pastikan CSV menggunakan encoding UTF-8.', 'error')
+        return redirect(url_for('dashboard'))
+
+    reader = csv.DictReader(text_stream)
+    if not reader.fieldnames:
+        flash('CSV kosong atau tidak memiliki header.', 'error')
+        return redirect(url_for('dashboard'))
+
+    normalized_fields = {name.strip().lower(): name for name in reader.fieldnames if name}
+    required = ['ip_address', 'username', 'password']
+    missing = [col for col in required if col not in normalized_fields]
+    if missing:
+        flash(f'Kolom wajib tidak ditemukan pada CSV: {", ".join(missing)}.', 'error')
+        return redirect(url_for('dashboard'))
+
+    def get(row, key):
+        col = normalized_fields.get(key)
+        return (row.get(col) or '').strip() if col else ''
+
+    added = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for index, row in enumerate(reader, start=2):
+        ip = get(row, 'ip_address')
+        username = get(row, 'username')
+        raw_password = get(row, 'password')
+
+        if not ip or not username or not raw_password:
+            skipped += 1
+            errors.append(f'Baris {index}: kolom wajib kosong.')
+            continue
+
+        password = decrypt_password(raw_password)
+        if password is None:
+            # Allow plaintext password as a graceful fallback.
+            password = raw_password
+
+        port_raw = get(row, 'port') or '22'
+        try:
+            port = int(port_raw)
+        except ValueError:
+            port = 22
+
+        device_type = get(row, 'device_type') or 'cisco_ios'
+        hostname = get(row, 'hostname')
+
+        if hostname:
+            duplicate = Device.query.filter(
+                (Device.ip_address == ip) | (Device.hostname == hostname)
+            ).first()
+        else:
+            duplicate = Device.query.filter_by(ip_address=ip).first()
+
+        if duplicate:
+            skipped += 1
+            errors.append(f'Baris {index}: {ip} sudah terdaftar.')
+            continue
+
+        if not hostname:
+            resolved, _ = get_device_hostname(ip, username, password, port)
+            hostname = resolved or ip
+
+            if Device.query.filter_by(hostname=hostname).first():
+                skipped += 1
+                errors.append(f'Baris {index}: hostname "{hostname}" sudah terdaftar.')
+                continue
+
+        success, _ = check_router_status(ip, username, password, port)
+        device = Device(
+            hostname=hostname,
+            ip_address=ip,
+            username=username,
+            password=password,
+            port=port,
+            device_type=device_type,
+            status='Online' if success else 'Offline',
+        )
+        db.session.add(device)
+        added += 1
+
+    if added:
+        db.session.commit()
+        log_action(f"Imported {added} device(s) from CSV (skipped {skipped})")
+    else:
+        db.session.rollback()
+
+    if added and not errors:
+        flash(f'Berhasil mengimpor {added} perangkat.', 'success')
+    elif added and errors:
+        flash(f'Mengimpor {added} perangkat. {skipped} dilewati: ' + ' | '.join(errors[:5]), 'warning')
+    else:
+        flash('Tidak ada perangkat yang diimpor. ' + (' | '.join(errors[:5]) if errors else ''), 'error')
+
+    return redirect(url_for('dashboard'))
+
 @app.route('/refresh-status')
 @login_required
 def refresh_status():
@@ -360,6 +501,7 @@ def device_detail(device_id):
 
     interfaces = get_interfaces(device.ip_address, device.username, device.password, device.port or 22)
     interface_count = len(interfaces)
+    _interfaces_cache_set(device.id, interfaces)
     version_success, version_output = show_version(device.ip_address, device.username, device.password, device.port or 22)
     version_info = parse_version_summary(version_output if version_success else '')
 
@@ -591,6 +733,7 @@ def all_interfaces():
         interfaces = []
         if status == 'Online':
             interfaces = get_interfaces(ip_address, username, password, port)
+            _interfaces_cache_set(device_id, interfaces)
         return {
             'device_id': device_id,
             'hostname': hostname,
@@ -633,14 +776,12 @@ def system_logs():
 def api_search_devices():
     """Global device search by hostname, management IP, or interface IP.
 
-    Used by the search bar in base.html. Results are scoped to devices the
-    current user is allowed to access. Interface IPs are sourced from a short
-    in-memory cache populated by the /interfaces page or lazily probed only
-    when the query looks like an IP fragment.
+    Results are scoped to devices the current user is allowed to access.
+    Interface IPs are read from an in-memory cache that is populated whenever
+    someone visits /interfaces or /device/<id>; we never trigger live SSH from
+    this endpoint so the search stays instant even when devices are slow or
+    offline.
     """
-    import concurrent.futures
-    import time as _time
-
     query = (request.args.get('q') or '').strip()
     if not query:
         return jsonify({'results': []})
@@ -669,79 +810,66 @@ def api_search_devices():
         if len(matches) >= 10:
             break
 
-    # 2) If query looks like part of an IP address, also search interface IPs
-    #    on online devices using a small in-memory cache to stay responsive.
-    looks_like_ip = any(ch.isdigit() for ch in query) or '.' in query
-    if looks_like_ip and len(matches) < 10:
-        candidates = [
-            d for d in devices
-            if d.id not in seen_ids and (d.status or '') == 'Online'
-        ]
-        if candidates:
-            results = _lookup_interface_ip_matches(candidates, needle, max_results=10 - len(matches))
-            for entry in results:
-                if entry['id'] in seen_ids:
+    # 2) Match interface IPs using cached snapshots only (no live SSH here).
+    if len(matches) < 10:
+        for d in devices:
+            if d.id in seen_ids:
+                continue
+            cached = _interfaces_cache_get(d.id)
+            if not cached:
+                continue
+            hit = None
+            for iface in cached:
+                ip = (iface.get('ip') or '').strip().lower()
+                if not ip or ip in ('unassigned', 'n/a'):
                     continue
-                matches.append(entry)
-                seen_ids.add(entry['id'])
+                if needle in ip:
+                    hit = iface.get('ip')
+                    break
+            if hit:
+                matches.append({
+                    'id': d.id,
+                    'hostname': d.hostname or '',
+                    'ip_address': d.ip_address or '',
+                    'port': d.port or 22,
+                    'status': d.status or 'Unknown',
+                    'matched_on': 'interface_ip',
+                    'matched_interface_ip': hit,
+                    'url': url_for('device_detail', device_id=d.id),
+                })
+                seen_ids.add(d.id)
+            if len(matches) >= 10:
+                break
 
     return jsonify({'results': matches})
 
 
-# Interface listing cache used by global search to avoid repeated SSH calls.
+# Interface listing cache used by global search.
 _interfaces_cache = {}
 _interfaces_cache_lock = threading.Lock()
-_INTERFACES_CACHE_TTL = 300  # seconds
+_INTERFACES_CACHE_TTL = 600  # seconds
 
 
-def _get_cached_interfaces(device):
-    """Return cached interfaces for a device, refreshing via SSH if stale."""
+def _interfaces_cache_set(device_id, interfaces):
+    """Store an interfaces snapshot for a device id."""
     import time as _time
-    now = _time.time()
+    if not interfaces:
+        return
     with _interfaces_cache_lock:
-        entry = _interfaces_cache.get(device.id)
-        if entry and now - entry[0] < _INTERFACES_CACHE_TTL:
-            return entry[1]
-    try:
-        ifs = get_interfaces(device.ip_address, device.username, device.password, device.port or 22)
-    except Exception:
-        ifs = []
+        _interfaces_cache[device_id] = (_time.time(), list(interfaces))
+
+
+def _interfaces_cache_get(device_id):
+    """Return cached interfaces for a device id, or None when stale/missing."""
+    import time as _time
     with _interfaces_cache_lock:
-        _interfaces_cache[device.id] = (now, ifs)
-    return ifs
-
-
-def _lookup_interface_ip_matches(devices, needle, max_results=5):
-    """Probe interfaces for the given devices and return search hits."""
-    import concurrent.futures
-    found = []
-
-    def probe(device):
-        ifs = _get_cached_interfaces(device)
-        for iface in ifs or []:
-            ip = (iface.get('ip') or '').strip().lower()
-            if not ip or ip in ('unassigned', 'n/a'):
-                continue
-            if needle in ip:
-                return {
-                    'id': device.id,
-                    'hostname': device.hostname or '',
-                    'ip_address': device.ip_address or '',
-                    'port': device.port or 22,
-                    'status': device.status or 'Unknown',
-                    'matched_on': 'interface_ip',
-                    'matched_interface_ip': iface.get('ip'),
-                    'url': url_for('device_detail', device_id=device.id),
-                }
+        entry = _interfaces_cache.get(device_id)
+    if not entry:
         return None
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        for result in executor.map(probe, devices):
-            if result:
-                found.append(result)
-                if len(found) >= max_results:
-                    break
-    return found
+    ts, ifs = entry
+    if _time.time() - ts > _INTERFACES_CACHE_TTL:
+        return None
+    return ifs
 
 @app.route('/logs/clear', methods=['POST'])
 @login_required

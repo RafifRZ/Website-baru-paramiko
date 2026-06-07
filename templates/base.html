@@ -349,7 +349,7 @@
                     </div>
                     <div>
                         <h1 class="text-white font-extrabold text-base tracking-tight">ParaMaster</h1>
-                        <p class="text-[9px] text-purple-400/50 font-bold uppercase tracking-[0.2em]">v0.8.9-Beta</p>
+                        <p class="text-[9px] text-purple-400/50 font-bold uppercase tracking-[0.2em]">v0.9.05-Beta</p>
                     </div>
                 </div>
             </div>
@@ -413,10 +413,11 @@
                         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[#3d4255] text-[10px]"></i>
                         <input type="text" id="global-search" placeholder="Search device atau IP..." autocomplete="off"
                             class="input-dark pl-8 pr-4 py-2 rounded-lg text-[11px] font-medium w-56 outline-none">
-                        <div id="global-search-results"
-                            class="hidden absolute right-0 mt-2 w-80 max-h-80 overflow-y-auto rounded-xl border z-50 shadow-2xl"
-                            style="background: var(--bg-modal); border-color: var(--border-color);">
-                        </div>
+                    </div>
+                    <!-- Search results dropdown is rendered as a fixed overlay so it isn't clipped by parents with overflow-hidden -->
+                    <div id="global-search-results"
+                        class="hidden fixed max-h-[70vh] overflow-y-auto rounded-xl border shadow-2xl"
+                        style="background: var(--bg-modal); border-color: var(--border-color); z-index: 1000;">
                     </div>
                 </div>
             </header>
@@ -559,6 +560,19 @@
             let currentResults = [];
             let lastQuery = '';
 
+            function positionDropdown() {
+                if (dropdown.classList.contains('hidden')) return;
+                const rect = input.getBoundingClientRect();
+                const width = Math.max(rect.width, 320);
+                const viewportW = window.innerWidth;
+                let left = rect.right - width;
+                if (left < 8) left = 8;
+                if (left + width > viewportW - 8) left = viewportW - width - 8;
+                dropdown.style.top = (rect.bottom + 6) + 'px';
+                dropdown.style.left = left + 'px';
+                dropdown.style.width = width + 'px';
+            }
+
             function escapeHtml(value) {
                 return String(value == null ? '' : value)
                     .replace(/&/g, '&amp;')
@@ -594,6 +608,7 @@
             function showDropdown(html) {
                 dropdown.innerHTML = html;
                 dropdown.classList.remove('hidden');
+                positionDropdown();
             }
 
             function hideDropdown() {
@@ -675,13 +690,14 @@
                 const value = input.value.trim();
                 lastQuery = value;
                 if (debounceTimer) clearTimeout(debounceTimer);
-                if (!value) { hideDropdown(); return; }
+                if (!value) { currentResults = []; hideDropdown(); return; }
                 debounceTimer = setTimeout(function() { runSearch(value); }, 220);
             });
 
             input.addEventListener('focus', function() {
                 if (input.value.trim() && currentResults.length) {
                     dropdown.classList.remove('hidden');
+                    positionDropdown();
                 }
             });
 
@@ -713,10 +729,13 @@
             });
 
             document.addEventListener('click', function(e) {
-                if (!wrapper.contains(e.target)) {
-                    hideDropdown();
-                }
+                if (wrapper.contains(e.target)) return;
+                if (dropdown.contains(e.target)) return;
+                hideDropdown();
             });
+
+            window.addEventListener('resize', positionDropdown);
+            window.addEventListener('scroll', positionDropdown, true);
         })();
     </script>
 </body>

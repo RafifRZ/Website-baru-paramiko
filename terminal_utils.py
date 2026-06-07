@@ -24,8 +24,6 @@ def connect_terminal_shell(ip, username, password, port=22, timeout=8):
         time.sleep(0.5)
         shell.send('terminal length 0\n')
         time.sleep(0.5)
-        shell.send('\n')
-        time.sleep(0.5)
         return True, 'Connected', client, shell
     except paramiko.AuthenticationException:
         return False, "Authentication failed - check username/password", None, None

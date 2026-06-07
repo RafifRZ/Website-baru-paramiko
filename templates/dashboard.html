@@ -17,6 +17,23 @@
                     <i class="fas fa-rotate text-[10px]" id="refresh-icon"></i>
                     <span id="refresh-text">Refresh</span>
                 </button>
+                <div class="relative" id="moreMenuWrapper">
+                    <button type="button" onclick="toggleMoreMenu(event)"
+                        class="glass-card glass-card-hover flex items-center justify-center w-10 h-10 text-[#525a6e] rounded-xl transition-all hover:text-purple-300"
+                        title="More options" aria-haspopup="true" aria-expanded="false" id="moreMenuBtn">
+                        <i class="fas fa-ellipsis-vertical text-xs"></i>
+                    </button>
+                    <div id="moreMenu"
+                        class="hidden absolute left-0 mt-2 w-48 rounded-xl glass-card overflow-hidden z-30 shadow-2xl"
+                        role="menu">
+                        <a href="{{ url_for('export_devices') }}"
+                            class="flex items-center gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#94a3b8] hover:text-emerald-300 hover:bg-white/5 transition-all"
+                            role="menuitem" onclick="closeMoreMenu()">
+                            <i class="fas fa-file-export text-[11px]"></i>
+                            Export CSV
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="relative">
@@ -169,7 +186,20 @@
                 <i class="fas fa-times text-sm"></i>
             </button>
         </div>
-        <form action="{{ url_for('add_device') }}" method="POST" class="p-8 space-y-5" id="addDeviceForm">
+        <div class="flex gap-1 px-8 pt-5" style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+            <button type="button" id="addTabManualBtn" onclick="switchAddTab('manual')"
+                class="add-tab-btn px-4 py-2.5 text-[10px] font-extrabold uppercase tracking-widest rounded-t-lg transition-all">
+                <i class="fas fa-keyboard mr-2 text-[10px]"></i> Manual
+            </button>
+            <button type="button" id="addTabImportBtn" onclick="switchAddTab('import')"
+                class="add-tab-btn px-4 py-2.5 text-[10px] font-extrabold uppercase tracking-widest rounded-t-lg transition-all">
+                <i class="fas fa-file-import mr-2 text-[10px]"></i> Import CSV
+            </button>
+        </div>
+
+        <!-- Tab 1: Manual -->
+        <div id="addTabManual" class="add-tab-panel">
+            <form action="{{ url_for('add_device') }}" method="POST" class="p-8 space-y-5" id="addDeviceForm">
             <div class="grid grid-cols-3 gap-4">
                 <div>
                     <label class="block text-[9px] font-extrabold text-[#525a6e] uppercase tracking-[0.15em] mb-2">Hostname</label>
@@ -214,7 +244,45 @@
                 </button>
                 <p id="verifyMessage" class="hidden text-xs font-bold rounded-xl px-4 py-3 text-center"></p>
             </div>
-        </form>
+            </form>
+        </div>
+
+        <!-- Tab 2: Import CSV -->
+        <div id="addTabImport" class="add-tab-panel hidden">
+            <form action="{{ url_for('import_devices') }}" method="POST" enctype="multipart/form-data"
+                class="p-8 space-y-5" id="importDeviceForm">
+                <div class="rounded-xl p-4 text-[11px] leading-relaxed font-medium text-[#94a3b8]"
+                    style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.18);">
+                    <p class="font-extrabold text-indigo-300 uppercase tracking-widest text-[9px] mb-2">CSV Format</p>
+                    <p>Kolom: <span class="font-mono text-slate-200">hostname, ip_address, port, username, password, device_type</span></p>
+                    <p class="mt-1.5">Password sebaiknya hasil ekspor dari sistem ini (terenkripsi). Plaintext tetap diterima sebagai cadangan.</p>
+                </div>
+
+                <label for="csvFileInput"
+                    class="block cursor-pointer rounded-xl px-4 py-8 text-center transition-all hover:bg-white/5"
+                    style="border: 1.5px dashed rgba(255,255,255,0.12);">
+                    <i class="fas fa-cloud-arrow-up text-2xl text-purple-400 mb-3"></i>
+                    <p class="text-xs font-bold text-slate-200" id="csvFileLabel">Klik untuk memilih file CSV</p>
+                    <p class="text-[10px] font-medium text-[#525a6e] mt-1">atau drag & drop di sini</p>
+                    <input type="file" name="csv_file" id="csvFileInput" accept=".csv,text/csv"
+                        class="hidden" onchange="updateCsvLabel(this)" required>
+                </label>
+
+                <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
+                    <a href="{{ url_for('export_devices') }}"
+                        class="text-[#525a6e] hover:text-emerald-300 transition-colors">
+                        <i class="fas fa-download mr-1.5"></i> Download Template
+                    </a>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit"
+                        class="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-extrabold uppercase tracking-widest text-[10px] rounded-xl hover:shadow-lg hover:shadow-purple-500/20 transition-all">
+                        <i class="fas fa-file-import mr-2"></i> Import Devices
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -270,6 +338,25 @@
         </form>
     </div>
 </div>
+
+<style>
+    .add-tab-btn {
+        color: var(--text-nav-item, #525a6e);
+        background: transparent;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+    }
+    .add-tab-btn.active {
+        color: #a78bfa;
+        border-bottom-color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.06);
+    }
+    .light .add-tab-btn.active {
+        color: #6366f1;
+        border-bottom-color: #6366f1;
+        background: rgba(99, 102, 241, 0.06);
+    }
+</style>
 
 <script>
     // Real-time search filter
@@ -334,6 +421,7 @@
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         resetAddModal();
+        switchAddTab('manual');
     }
 
     function closeAddModal() {
@@ -356,7 +444,64 @@
         submitBtn.classList.add('hidden');
         submitBtn.disabled = true;
         message.classList.add('hidden');
+
+        const importForm = document.getElementById('importDeviceForm');
+        if (importForm) importForm.reset();
+        const csvLabel = document.getElementById('csvFileLabel');
+        if (csvLabel) csvLabel.textContent = 'Klik untuk memilih file CSV';
     }
+
+    function switchAddTab(tab) {
+        const manualPanel = document.getElementById('addTabManual');
+        const importPanel = document.getElementById('addTabImport');
+        const manualBtn = document.getElementById('addTabManualBtn');
+        const importBtn = document.getElementById('addTabImportBtn');
+        if (!manualPanel || !importPanel) return;
+
+        if (tab === 'import') {
+            manualPanel.classList.add('hidden');
+            importPanel.classList.remove('hidden');
+            manualBtn.classList.remove('active');
+            importBtn.classList.add('active');
+        } else {
+            importPanel.classList.add('hidden');
+            manualPanel.classList.remove('hidden');
+            importBtn.classList.remove('active');
+            manualBtn.classList.add('active');
+        }
+    }
+
+    function updateCsvLabel(input) {
+        const label = document.getElementById('csvFileLabel');
+        if (!label) return;
+        if (input.files && input.files.length) {
+            label.textContent = input.files[0].name;
+        } else {
+            label.textContent = 'Klik untuk memilih file CSV';
+        }
+    }
+
+    function toggleMoreMenu(event) {
+        event.stopPropagation();
+        const menu = document.getElementById('moreMenu');
+        const btn = document.getElementById('moreMenuBtn');
+        if (!menu || !btn) return;
+        const isHidden = menu.classList.contains('hidden');
+        menu.classList.toggle('hidden');
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+    }
+
+    function closeMoreMenu() {
+        const menu = document.getElementById('moreMenu');
+        const btn = document.getElementById('moreMenuBtn');
+        if (menu) menu.classList.add('hidden');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
+    document.addEventListener('click', (e) => {
+        const wrapper = document.getElementById('moreMenuWrapper');
+        if (wrapper && !wrapper.contains(e.target)) closeMoreMenu();
+    });
 
     function closeEditModal() {
         const modal = document.getElementById('editDeviceModal');
