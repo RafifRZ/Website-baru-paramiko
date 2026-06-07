@@ -628,6 +628,137 @@ def system_logs():
     logs = Log.query.order_by(Log.timestamp.desc()).limit(100).all()
     return render_template('logs.html', logs=logs)   
 
+@app.route('/api/search-devices')
+@login_required
+def api_search_devices():
+    """Global device search by hostname, management IP, or interface IP.
+
+    Used by the search bar in base.html. Results are scoped to devices the
+    current user is allowed to access. Interface IPs are sourced from a short
+    in-memory cache populated by the /interfaces page or lazily probed only
+    when the query looks like an IP fragment.
+    """
+    import concurrent.futures
+    import time as _time
+
+    query = (request.args.get('q') or '').strip()
+    if not query:
+        return jsonify({'results': []})
+
+    devices = get_user_devices()
+    needle = query.lower()
+    matches = []
+    seen_ids = set()
+
+    # 1) Fast match against hostname / management IP from the DB.
+    for d in devices:
+        hostname = (d.hostname or '')
+        ip = (d.ip_address or '')
+        if needle in hostname.lower() or needle in ip.lower():
+            matches.append({
+                'id': d.id,
+                'hostname': hostname,
+                'ip_address': ip,
+                'port': d.port or 22,
+                'status': d.status or 'Unknown',
+                'matched_on': 'hostname' if needle in hostname.lower() else 'ip',
+                'matched_interface_ip': None,
+                'url': url_for('device_detail', device_id=d.id),
+            })
+            seen_ids.add(d.id)
+        if len(matches) >= 10:
+            break
+
+    # 2) If query looks like part of an IP address, also search interface IPs
+    #    on online devices using a small in-memory cache to stay responsive.
+    looks_like_ip = any(ch.isdigit() for ch in query) or '.' in query
+    if looks_like_ip and len(matches) < 10:
+        candidates = [
+            d for d in devices
+            if d.id not in seen_ids and (d.status or '') == 'Online'
+        ]
+        if candidates:
+            results = _lookup_interface_ip_matches(candidates, needle, max_results=10 - len(matches))
+            for entry in results:
+                if entry['id'] in seen_ids:
+                    continue
+                matches.append(entry)
+                seen_ids.add(entry['id'])
+
+    return jsonify({'results': matches})
+
+
+# Interface listing cache used by global search to avoid repeated SSH calls.
+_interfaces_cache = {}
+_interfaces_cache_lock = threading.Lock()
+_INTERFACES_CACHE_TTL = 300  # seconds
+
+
+def _get_cached_interfaces(device):
+    """Return cached interfaces for a device, refreshing via SSH if stale."""
+    import time as _time
+    now = _time.time()
+    with _interfaces_cache_lock:
+        entry = _interfaces_cache.get(device.id)
+        if entry and now - entry[0] < _INTERFACES_CACHE_TTL:
+            return entry[1]
+    try:
+        ifs = get_interfaces(device.ip_address, device.username, device.password, device.port or 22)
+    except Exception:
+        ifs = []
+    with _interfaces_cache_lock:
+        _interfaces_cache[device.id] = (now, ifs)
+    return ifs
+
+
+def _lookup_interface_ip_matches(devices, needle, max_results=5):
+    """Probe interfaces for the given devices and return search hits."""
+    import concurrent.futures
+    found = []
+
+    def probe(device):
+        ifs = _get_cached_interfaces(device)
+        for iface in ifs or []:
+            ip = (iface.get('ip') or '').strip().lower()
+            if not ip or ip in ('unassigned', 'n/a'):
+                continue
+            if needle in ip:
+                return {
+                    'id': device.id,
+                    'hostname': device.hostname or '',
+                    'ip_address': device.ip_address or '',
+                    'port': device.port or 22,
+                    'status': device.status or 'Unknown',
+                    'matched_on': 'interface_ip',
+                    'matched_interface_ip': iface.get('ip'),
+                    'url': url_for('device_detail', device_id=device.id),
+                }
+        return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        for result in executor.map(probe, devices):
+            if result:
+                found.append(result)
+                if len(found) >= max_results:
+                    break
+    return found
+
+@app.route('/logs/clear', methods=['POST'])
+@login_required
+def clear_logs():
+    if current_user.username != 'admin':
+        flash('Hanya admin utama yang dapat menghapus log.', 'danger')
+        return redirect(url_for('system_logs'))
+    try:
+        deleted = Log.query.delete()
+        db.session.commit()
+        log_action(f'Semua log dihapus oleh admin ({deleted} entri direset)', level='WARNING')
+        flash(f'Berhasil menghapus {deleted} entri log.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Gagal menghapus log: {e}', 'danger')
+    return redirect(url_for('system_logs'))
+
 @app.route('/terminal')
 @login_required
 def terminal():

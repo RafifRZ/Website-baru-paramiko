@@ -2,7 +2,7 @@ import paramiko
 import time
 
 
-def connect_terminal_shell(ip, username, password, port=22, timeout=10):
+def connect_terminal_shell(ip, username, password, port=22, timeout=8):
     """Open an SSH shell session for terminal communication."""
     client = None
     shell = None
@@ -15,6 +15,8 @@ def connect_terminal_shell(ip, username, password, port=22, timeout=10):
             username=username,
             password=password,
             timeout=timeout,
+            banner_timeout=timeout,
+            auth_timeout=timeout,
             look_for_keys=False,
             allow_agent=False,
         )

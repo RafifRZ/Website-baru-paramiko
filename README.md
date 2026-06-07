@@ -1,4 +1,4 @@
-# NetMaster - Network Management Dashboard
+﻿# NetMaster - Network Management Dashboard
 
 A modern web-based automation tool for Cisco GNS3 devices.
 
@@ -58,6 +58,19 @@ To connect to your routers, ensure:
 
 1. The Ubuntu VM can ping the GNS3 routers.
 2. Routers have SSH enabled.
+
+Example Cisco configuration:
+
+```cisco
+hostname R1
+ip domain-name local.lab
+crypto key generate rsa
+ip ssh version 2
+username admin privilege 15 password admin
+line vty 0 4
+login local
+transport input ssh
+```
 
 ## Development
 

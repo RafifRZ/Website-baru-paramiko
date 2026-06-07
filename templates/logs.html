@@ -15,11 +15,42 @@
                 <i class="fas fa-file-csv text-indigo-400"></i>
                 Download CSV
             </button>
+            {% if current_user.is_authenticated and current_user.username == 'admin' %}
+            <button type="button" onclick="openClearLogsModal()" class="flex items-center gap-2 px-5 py-2.5 bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-rose-500/20">
+                <i class="fas fa-trash"></i>
+                Hapus Semua Log
+            </button>
+            {% endif %}
             <button onclick="window.location.reload()" class="px-5 py-2.5 bg-indigo-600/90 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20">
                 Refresh Logs
             </button>
         </div>
     </div>
+
+    {% if current_user.is_authenticated and current_user.username == 'admin' %}
+    <!-- Confirm Clear Logs Modal -->
+    <div id="clear-logs-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="glass-card rounded-2xl p-6 w-full max-w-md mx-4 border border-rose-500/20">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                    <i class="fas fa-triangle-exclamation text-rose-400 text-lg"></i>
+                </div>
+                <div class="flex-1">
+                    <h4 class="text-base font-black text-white">Hapus Semua Log?</h4>
+                    <p class="text-xs text-slate-400 mt-1 leading-relaxed">Tindakan ini akan menghapus seluruh entri log sistem secara permanen dan tidak dapat dibatalkan.</p>
+                </div>
+            </div>
+            <form action="{{ url_for('clear_logs') }}" method="POST" class="mt-6 flex justify-end gap-2">
+                <button type="button" onclick="closeClearLogsModal()" class="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 text-xs font-bold rounded-lg transition-all">
+                    Batal
+                </button>
+                <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-rose-500/20">
+                    <i class="fas fa-trash mr-1"></i> Ya, Hapus Semua
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Logs Table Container -->
     <div class="flex-1 glass-card rounded-[2rem] overflow-hidden flex flex-col">
@@ -104,5 +135,32 @@
         link.click();
         document.body.removeChild(link);
     }
+
+    function openClearLogsModal() {
+        const modal = document.getElementById('clear-logs-modal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeClearLogsModal() {
+        const modal = document.getElementById('clear-logs-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    document.addEventListener('click', function (e) {
+        const modal = document.getElementById('clear-logs-modal');
+        if (modal && e.target === modal) {
+            closeClearLogsModal();
+        }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeClearLogsModal();
+        }
+    });
 </script>
 {% endblock %}

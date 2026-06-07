@@ -30,7 +30,9 @@ class ParamikoUtils:
                 port=self.port,
                 username=self.username,
                 password=self.password,
-                timeout=15,
+                timeout=8,
+                banner_timeout=8,
+                auth_timeout=8,
                 look_for_keys=False,
                 allow_agent=False,
             )
@@ -64,11 +66,20 @@ class ParamikoUtils:
         try:
             # Use invoke_shell for interactive commands
             shell = self.client.invoke_shell()
+            shell.send('terminal length 0\n')
+            time.sleep(0.2)
             shell.send('show ip interface brief\n')
-            time.sleep(2)  # Wait for output
             output = ''
-            while shell.recv_ready():
-                output += shell.recv(1024).decode('utf-8', errors='ignore')
+            last_data_at = time.time()
+            timeout_at = time.time() + 6
+            while time.time() < timeout_at:
+                if shell.recv_ready():
+                    output += shell.recv(4096).decode('utf-8', errors='ignore')
+                    last_data_at = time.time()
+                elif time.time() - last_data_at > 0.6:
+                    break
+                else:
+                    time.sleep(0.1)
             shell.close()
 
             # Parse interfaces from output
@@ -228,14 +239,14 @@ class ParamikoUtils:
         try:
             # Method 1: Try reading the prompt from an interactive shell
             shell = self.client.invoke_shell()
-            time.sleep(1)  # Wait for connection banner/motd
+            time.sleep(0.5)  # Wait for connection banner/motd
             # Clear buffer
             if shell.recv_ready():
                 shell.recv(65535)
 
             # Send newline to trigger prompt
             shell.send('\n')
-            time.sleep(1)
+            time.sleep(0.4)
             output = ''
             while shell.recv_ready():
                 output += shell.recv(1024).decode('utf-8', errors='ignore')
@@ -252,10 +263,17 @@ class ParamikoUtils:
 
             # Fallback Method 2: Try running 'show running-config | include hostname'
             shell.send('show running-config | include hostname\n')
-            time.sleep(1.5)
             output = ''
-            while shell.recv_ready():
-                output += shell.recv(1024).decode('utf-8', errors='ignore')
+            last_data_at = time.time()
+            timeout_at = time.time() + 5
+            while time.time() < timeout_at:
+                if shell.recv_ready():
+                    output += shell.recv(1024).decode('utf-8', errors='ignore')
+                    last_data_at = time.time()
+                elif time.time() - last_data_at > 0.6:
+                    break
+                else:
+                    time.sleep(0.1)
             shell.close()
 
             for line in output.splitlines():
