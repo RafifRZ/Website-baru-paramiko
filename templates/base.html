@@ -349,7 +349,7 @@
                     </div>
                     <div>
                         <h1 class="text-white font-extrabold text-base tracking-tight">ParaMaster</h1>
-                        <p class="text-[9px] text-purple-400/50 font-bold uppercase tracking-[0.2em]">v0.9.05-Beta</p>
+                        <p class="text-[9px] text-purple-400/50 font-bold uppercase tracking-[0.2em]">v0.9.2-Beta</p>
                     </div>
                 </div>
             </div>
@@ -414,11 +414,6 @@
                         <input type="text" id="global-search" placeholder="Search device atau IP..." autocomplete="off"
                             class="input-dark pl-8 pr-4 py-2 rounded-lg text-[11px] font-medium w-56 outline-none">
                     </div>
-                    <!-- Search results dropdown is rendered as a fixed overlay so it isn't clipped by parents with overflow-hidden -->
-                    <div id="global-search-results"
-                        class="hidden fixed max-h-[70vh] overflow-y-auto rounded-xl border shadow-2xl"
-                        style="background: var(--bg-modal); border-color: var(--border-color); z-index: 1000;">
-                    </div>
                 </div>
             </header>
 
@@ -444,6 +439,12 @@
     <button id="terminal-restore" class="terminal-restore" onclick="openTerminalRestore()">
         <i class="fas fa-terminal mr-2"></i> TERMINAL ACTIVE
     </button>
+
+    <!-- Global Search Results Dropdown (rendered at body level so it isn't clipped by header backdrop-filter / overflow) -->
+    <div id="global-search-results"
+        class="hidden fixed max-h-[70vh] overflow-y-auto rounded-xl border shadow-2xl"
+        style="background: var(--bg-modal); border-color: var(--border-color); z-index: 9999;">
+    </div>
 
     <script>
         function toggleTheme() {

@@ -26,9 +26,9 @@
                     <div id="moreMenu"
                         class="hidden absolute left-0 mt-2 w-48 rounded-xl glass-card overflow-hidden z-30 shadow-2xl"
                         role="menu">
-                        <a href="{{ url_for('export_devices') }}"
+                        <a href="{{ url_for('export_devices') }}" id="exportCsvLink"
                             class="flex items-center gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#94a3b8] hover:text-emerald-300 hover:bg-white/5 transition-all"
-                            role="menuitem" onclick="closeMoreMenu()">
+                            role="menuitem" onclick="return handleExportClick(event)">
                             <i class="fas fa-file-export text-[11px]"></i>
                             Export CSV
                         </a>
@@ -268,13 +268,6 @@
                         class="hidden" onchange="updateCsvLabel(this)" required>
                 </label>
 
-                <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
-                    <a href="{{ url_for('export_devices') }}"
-                        class="text-[#525a6e] hover:text-emerald-300 transition-colors">
-                        <i class="fas fa-download mr-1.5"></i> Download Template
-                    </a>
-                </div>
-
                 <div class="pt-2">
                     <button type="submit"
                         class="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-extrabold uppercase tracking-widest text-[10px] rounded-xl hover:shadow-lg hover:shadow-purple-500/20 transition-all">
@@ -496,6 +489,23 @@
         const btn = document.getElementById('moreMenuBtn');
         if (menu) menu.classList.add('hidden');
         if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function handleExportClick(event) {
+        const totalEl = document.getElementById('stat-total');
+        const total = totalEl ? parseInt(totalEl.innerText, 10) || 0 : 0;
+        if (total < 1) {
+            event.preventDefault();
+            closeMoreMenu();
+            if (typeof showNotification === 'function') {
+                showNotification('Tidak ada perangkat untuk diekspor. Tambahkan minimal satu perangkat terlebih dahulu.', 'error');
+            } else {
+                alert('Tidak ada perangkat untuk diekspor. Tambahkan minimal satu perangkat terlebih dahulu.');
+            }
+            return false;
+        }
+        closeMoreMenu();
+        return true;
     }
 
     document.addEventListener('click', (e) => {

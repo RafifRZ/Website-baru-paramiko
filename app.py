@@ -27,6 +27,25 @@ def get_user_devices():
         return []
     return Device.query.filter(Device.id.in_(allowed_ids)).all()
 
+
+def grant_device_access(user, device_ids):
+    """Append device_ids to a user's allowed_devices list (idempotent).
+
+    The default 'admin' user is skipped because it implicitly has access to
+    every device. Caller is responsible for committing the session.
+    """
+    if user is None or user.username == 'admin':
+        return
+    new_ids = [int(d) for d in device_ids if d is not None]
+    if not new_ids:
+        return
+    current_ids = user.get_allowed_device_ids()
+    merged = list(current_ids)
+    for did in new_ids:
+        if did not in merged:
+            merged.append(did)
+    user.allowed_devices = ','.join(str(i) for i in merged)
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///network.db'
@@ -235,6 +254,8 @@ def add_device():
 
     new_device = Device(hostname=hostname, ip_address=ip, username=username, password=password, port=port, status='Online')
     db.session.add(new_device)
+    db.session.flush()  # ensure new_device.id is populated before granting access
+    grant_device_access(current_user, [new_device.id])
     db.session.commit()
     log_action(f"Added device {hostname} ({ip}:{port})")
     flash('Device registered successfully', 'success')
@@ -246,6 +267,15 @@ def export_devices():
     """Stream a CSV of the current user's devices with the password column
     encrypted using the local Fernet key."""
     devices = get_user_devices()
+
+    if not devices:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': False,
+                'message': 'Tidak ada perangkat untuk diekspor. Tambahkan minimal satu perangkat terlebih dahulu.',
+            }), 400
+        flash('Tidak ada perangkat untuk diekspor. Tambahkan minimal satu perangkat terlebih dahulu.', 'error')
+        return redirect(url_for('dashboard'))
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -262,7 +292,7 @@ def export_devices():
 
     log_action(f"Exported {len(devices)} device(s) to CSV")
     timestamp = datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%Y%m%d-%H%M%S')
-    filename = f'devices-{timestamp}.csv'
+    filename = f'ParamikoDevices-{timestamp}.csv'
 
     response = Response(buffer.getvalue(), mimetype='text/csv; charset=utf-8')
     response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -305,6 +335,7 @@ def import_devices():
     added = 0
     skipped = 0
     errors: list[str] = []
+    new_device_ids: list[int] = []
 
     for index, row in enumerate(reader, start=2):
         ip = get(row, 'ip_address')
@@ -362,9 +393,12 @@ def import_devices():
             status='Online' if success else 'Offline',
         )
         db.session.add(device)
+        db.session.flush()
+        new_device_ids.append(device.id)
         added += 1
 
     if added:
+        grant_device_access(current_user, new_device_ids)
         db.session.commit()
         log_action(f"Imported {added} device(s) from CSV (skipped {skipped})")
     else:
@@ -638,7 +672,9 @@ def batch_config():
                 device_id=device.id,
             )
 
-        return render_template('batch_results.html', results=results)
+        # Render the same page with the results inline so the user stays in context
+        all_devices = get_user_devices()
+        return render_template('batch_config.html', devices=all_devices, results=results)
 
     # GET request – render the configuration page with all devices
     devices = get_user_devices()
@@ -646,15 +682,39 @@ def batch_config():
 
 # --- User Management ---
 
+USERNAME_PATTERN = re.compile(r'^[A-Za-z0-9_.-]{3,32}$')
+MIN_PASSWORD_LEN = 6
+
+
+def _sanitize_device_ids(raw_ids):
+    """Validate posted device IDs against the database. Returns a comma-separated string of valid IDs."""
+    if not raw_ids:
+        return ''
+    valid_ids = []
+    seen = set()
+    for raw in raw_ids:
+        try:
+            device_id = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if device_id in seen:
+            continue
+        if Device.query.get(device_id):
+            valid_ids.append(device_id)
+            seen.add(device_id)
+    return ','.join(str(i) for i in valid_ids)
+
+
 @app.route('/users')
 @login_required
 def users():
     if current_user.username == 'admin':
-        users_list = User.query.all()
+        users_list = User.query.order_by(User.id.asc()).all()
     else:
         users_list = User.query.filter_by(id=current_user.id).all()
-    devices = Device.query.all()
+    devices = Device.query.order_by(Device.hostname.asc()).all()
     return render_template('users.html', users=users_list, devices=devices)
+
 
 @app.route('/users/add', methods=['POST'])
 @login_required
@@ -662,54 +722,83 @@ def add_user():
     if current_user.username != 'admin':
         flash('Access denied', 'error')
         return redirect(url_for('users'))
-    username = request.form.get('username')
-    password = request.form.get('password')
-    
-    # Get selected device IDs (checkboxes named 'devices')
-    selected_devices = request.form.getlist('devices')
-    allowed_devices_str = ','.join([d for d in selected_devices if d])
-    
+
+    username = (request.form.get('username') or '').strip()
+    password = request.form.get('password') or ''
+
+    if not username or not password:
+        flash('Username and password are required', 'error')
+        return redirect(url_for('users'))
+    if not USERNAME_PATTERN.match(username):
+        flash('Username must be 3-32 chars (letters, digits, dot, dash, underscore)', 'error')
+        return redirect(url_for('users'))
+    if username.lower() == 'admin':
+        flash('Username "admin" is reserved', 'error')
+        return redirect(url_for('users'))
+    if len(password) < MIN_PASSWORD_LEN:
+        flash(f'Password must be at least {MIN_PASSWORD_LEN} characters', 'error')
+        return redirect(url_for('users'))
     if User.query.filter_by(username=username).first():
         flash('Username already exists', 'error')
-    else:
-        new_user = User(username=username, password=generate_password_hash(password), allowed_devices=allowed_devices_str)
-        db.session.add(new_user)
-        db.session.commit()
-        log_action(f"Created new system user: {username}")
-        flash('User created successfully', 'success')
+        return redirect(url_for('users'))
+
+    allowed_devices_str = _sanitize_device_ids(request.form.getlist('devices'))
+    new_user = User(
+        username=username,
+        password=generate_password_hash(password),
+        allowed_devices=allowed_devices_str,
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    log_action(f"Created new system user: {username}")
+    flash('User created successfully', 'success')
     return redirect(url_for('users'))
+
 
 @app.route('/users/delete/<int:user_id>', methods=['POST'])
 @login_required
 def delete_user(user_id):
-    if current_user.username != 'admin' and current_user.id != user_id:
+    if current_user.username != 'admin':
         flash('Access denied', 'error')
         return redirect(url_for('users'))
     user = User.query.get_or_404(user_id)
     if user.username == 'admin':
         flash('Cannot delete default admin', 'error')
-    else:
-        username = user.username
-        db.session.delete(user)
-        db.session.commit()
-        log_action(f"Deleted system user: {username}")
-        flash('User removed', 'success')
+        return redirect(url_for('users'))
+    if user.id == current_user.id:
+        flash('You cannot delete your own account', 'error')
+        return redirect(url_for('users'))
+    username = user.username
+    db.session.delete(user)
+    db.session.commit()
+    log_action(f"Deleted system user: {username}", level='WARNING')
+    flash('User removed', 'success')
     return redirect(url_for('users'))
 
 
 @app.route('/users/edit/<int:user_id>', methods=['POST'])
 @login_required
 def edit_user(user_id):
-    if current_user.username != 'admin' and current_user.id != user_id:
+    is_admin = current_user.username == 'admin'
+    is_self = current_user.id == user_id
+    if not is_admin and not is_self:
         flash('Access denied', 'error')
         return redirect(url_for('users'))
+
     user = User.query.get_or_404(user_id)
-    # Only allow changing password and allowed devices (not username)
-    new_password = request.form.get('password')
-    selected_devices = request.form.getlist('devices')
-    user.allowed_devices = ','.join([d for d in selected_devices if d])
+    new_password = request.form.get('password') or ''
+
+    # Only the default admin can modify device assignments. Non-admin users editing themselves
+    # may only change their password — they cannot grant themselves additional device access.
+    if is_admin and user.username != 'admin':
+        user.allowed_devices = _sanitize_device_ids(request.form.getlist('devices'))
+
     if new_password:
+        if len(new_password) < MIN_PASSWORD_LEN:
+            flash(f'Password must be at least {MIN_PASSWORD_LEN} characters', 'error')
+            return redirect(url_for('users'))
         user.password = generate_password_hash(new_password)
+
     db.session.commit()
     log_action(f"Updated system user: {user.username}")
     flash('User updated successfully', 'success')

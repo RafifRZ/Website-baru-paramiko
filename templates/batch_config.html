@@ -1,29 +1,134 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    /* Offline device card: disabled & greyed out */
+    .device-card-offline {
+        opacity: 0.45;
+        cursor: not-allowed !important;
+        filter: grayscale(0.8);
+        position: relative;
+    }
+    .device-card-offline .device-card-inner {
+        background: rgba(255, 255, 255, 0.02) !important;
+        border-color: rgba(255, 255, 255, 0.04) !important;
+        box-shadow: none !important;
+    }
+    .device-card-offline .device-card-inner * {
+        color: #525a6e !important;
+    }
+    .device-card-offline:hover .device-card-inner {
+        border-color: rgba(255, 255, 255, 0.04) !important;
+        background: rgba(255, 255, 255, 0.02) !important;
+    }
+
+    /* Status dot inside the card */
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        display: inline-block;
+    }
+    .status-dot.online { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
+    .status-dot.offline { background: #f43f5e; }
+    .status-dot.unknown { background: #64748b; }
+
+    /* ── Print rules: only print the results block ── */
+    @media print {
+        body * { visibility: hidden !important; }
+        #batch-print-area, #batch-print-area * { visibility: visible !important; }
+        #batch-print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 16px;
+            background: #ffffff !important;
+            color: #0f172a !important;
+        }
+        #batch-print-area .glass-card {
+            background: #ffffff !important;
+            border: 1px solid #cbd5e1 !important;
+            box-shadow: none !important;
+            page-break-inside: avoid;
+            margin-bottom: 12px;
+            border-radius: 8px !important;
+        }
+        #batch-print-area pre {
+            background: #f8fafc !important;
+            color: #0f172a !important;
+            border: 1px solid #e2e8f0 !important;
+            white-space: pre-wrap !important;
+            word-break: break-word !important;
+            padding: 10px !important;
+            border-radius: 6px !important;
+        }
+        #batch-print-area .result-card-header {
+            background: #ffffff !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+        #batch-print-area .text-white,
+        #batch-print-area .text-slate-300,
+        #batch-print-area .text-slate-400,
+        #batch-print-area .text-slate-500 {
+            color: #0f172a !important;
+        }
+        #batch-print-area .badge-success {
+            color: #059669 !important;
+            background: #ecfdf5 !important;
+            border-color: #a7f3d0 !important;
+        }
+        #batch-print-area .badge-failed {
+            color: #dc2626 !important;
+            background: #fef2f2 !important;
+            border-color: #fecaca !important;
+        }
+        .no-print { display: none !important; }
+        @page { margin: 12mm; }
+    }
+</style>
+
 <div class="px-8 py-6 animate-[fadeInUp_0.4s_ease-out]">
     <!-- Header Section -->
-    <div class="mb-8">
+    <div class="mb-8 no-print">
         <h3 class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
             <i class="fas fa-layer-group text-indigo-400"></i> Batch Configuration
         </h3>
         <p class="text-slate-500 mt-1 text-[10px] font-black uppercase tracking-widest">Execute configurations across multiple nodes simultaneously using CSV or raw CLI commands.</p>
     </div>
 
-    <form action="{{ url_for('batch_config') }}" method="POST" enctype="multipart/form-data">
-        <!-- Device Selection Section (Moved INSIDE form) -->
+    <form action="{{ url_for('batch_config') }}" method="POST" enctype="multipart/form-data" class="no-print">
+        <!-- Device Selection Section -->
         <div class="mb-10">
-            <div class="flex items-center gap-2 mb-4">
-                <i class="fas fa-server text-slate-500 text-xs"></i>
-                <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Target Nodes Selection</h4>
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-server text-slate-500 text-xs"></i>
+                    <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Target Nodes Selection</h4>
+                </div>
+                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                    <i class="fas fa-circle-exclamation text-amber-400/70 mr-1"></i>
+                    Offline nodes are disabled
+                </p>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {% for device in devices %}
-                <label class="group cursor-pointer select-none">
-                    <input type="checkbox" name="devices" value="{{ device.id }}" class="hidden peer">
-                    <div class="px-5 py-4 glass-card rounded-2xl text-center transition-all duration-300 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10 peer-checked:shadow-[0_0_15px_rgba(99,102,241,0.15)] group-hover:border-white/10">
-                        <p class="text-xs font-bold text-slate-300 peer-checked:text-indigo-400 group-hover:text-white transition-colors">{{ device.hostname }}</p>
+                {% set is_offline = device.status != 'Online' %}
+                <label class="group select-none {{ 'device-card-offline' if is_offline else 'cursor-pointer' }}"
+                       {% if is_offline %}title="Device offline / unreachable"{% endif %}>
+                    <input type="checkbox" name="devices" value="{{ device.id }}" class="hidden peer"
+                           {% if is_offline %}disabled{% endif %}>
+                    <div class="device-card-inner px-5 py-4 glass-card rounded-2xl text-center transition-all duration-300 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10 peer-checked:shadow-[0_0_15px_rgba(99,102,241,0.15)] {{ '' if is_offline else 'group-hover:border-white/10' }}">
+                        <div class="flex items-center justify-center gap-1.5 mb-1">
+                            <span class="status-dot {{ 'online' if device.status == 'Online' else ('offline' if device.status == 'Offline' else 'unknown') }}"></span>
+                            <p class="text-xs font-bold text-slate-300 peer-checked:text-indigo-400 group-hover:text-white transition-colors">{{ device.hostname }}</p>
+                        </div>
                         <p class="text-[9px] font-semibold text-slate-500 font-mono mt-1 tracking-wider uppercase">{{ device.ip_address }}</p>
+                        <p class="text-[8px] font-bold mt-1.5 uppercase tracking-widest
+                            {% if device.status == 'Online' %}text-emerald-400/80
+                            {% elif device.status == 'Offline' %}text-rose-400/80
+                            {% else %}text-slate-500{% endif %}">
+                            {{ device.status }}
+                        </p>
                     </div>
                 </label>
                 {% endfor %}
@@ -103,6 +208,64 @@
             </div>
         </div>
     </form>
+
+    <!-- ── Inline Results Section ── -->
+    {% if results is defined and results is not none %}
+    <div id="batch-print-area">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center">
+                    <i class="fas fa-clipboard-check"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-black text-white tracking-tight">Execution Results</h3>
+                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-0.5">
+                        {{ results | length }} node(s) executed
+                    </p>
+                </div>
+            </div>
+            <button type="button" onclick="window.print()" class="no-print flex items-center gap-2 px-5 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 text-xs font-bold rounded-xl transition-all shadow-sm">
+                <i class="fas fa-print text-indigo-400"></i>
+                Print Report
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6">
+            {% for result in results %}
+            <div class="glass-card rounded-[2rem] overflow-hidden">
+                <div class="result-card-header px-8 py-5 border-b border-white/5 flex items-center justify-between {{ 'bg-emerald-500/5' if result.success else 'bg-rose-500/5' }}">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 {{ 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' if result.success else 'bg-rose-500/10 text-rose-400 border-rose-500/20' }} border rounded-2xl flex items-center justify-center text-lg shrink-0">
+                            <i class="fas {{ 'fa-circle-check' if result.success else 'fa-circle-exclamation' }}"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-white tracking-tight">{{ result.hostname }}</h4>
+                            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">SSH EXECUTION STATUS</p>
+                        </div>
+                    </div>
+                    <span class="px-4 py-1.5 border text-xs font-bold uppercase tracking-wider rounded-full
+                        {{ 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 badge-success' if result.success else 'bg-rose-500/10 text-rose-400 border-rose-500/20 badge-failed' }}">
+                        {{ 'Success' if result.success else 'Failed' }}
+                    </span>
+                </div>
+                <div class="p-6 bg-[#05050a] overflow-x-auto border-t border-white/5">
+                    <pre class="text-xs font-mono text-emerald-400/80 leading-relaxed font-semibold selection:bg-emerald-500/30">{{ result.output }}</pre>
+                </div>
+            </div>
+            {% endfor %}
+
+            {% if results | length == 0 %}
+            <div class="glass-card rounded-[2.5rem] p-20 flex flex-col items-center justify-center text-center">
+                <div class="w-20 h-20 bg-white/5 border border-white/5 text-slate-500 rounded-[2rem] flex items-center justify-center text-3xl mb-6">
+                    <i class="fas fa-box-open"></i>
+                </div>
+                <h4 class="text-lg font-black text-white tracking-tight">No Results Found</h4>
+                <p class="text-slate-400 mt-2 text-xs font-semibold max-w-xs">No execution tasks were performed. Please check your command format or device selection.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <script>
@@ -136,8 +299,7 @@
             csvSec.classList.remove('hidden');
             rawSec.classList.add('hidden');
             desc.innerHTML = 'Format CSV: <span class="bg-[#141420] border border-white/5 px-2 py-0.5 rounded text-indigo-400 font-mono">command</span>';
-            
-            // Sync textareas so if they wrote to raw CLI textarea it is copied to raw_commands which is the input name processed by backend
+
             if (rawCliText && rawCommandsText) {
                 rawCommandsText.name = "raw_commands";
                 rawCliText.name = "";
@@ -150,8 +312,7 @@
             rawSec.classList.remove('hidden');
             csvSec.classList.add('hidden');
             desc.innerHTML = 'Execute raw Cisco IOS commands directly on selected devices.';
-            
-            // Sync name attributes so backend processes the active textarea
+
             if (rawCliText && rawCommandsText) {
                 rawCliText.name = "raw_commands";
                 rawCommandsText.name = "";
@@ -160,8 +321,13 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        // Initial tab state
         switchTab('csv');
+
+        // Auto-scroll to results when present
+        const printArea = document.getElementById('batch-print-area');
+        if (printArea) {
+            printArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     });
 </script>
 {% endblock %}
