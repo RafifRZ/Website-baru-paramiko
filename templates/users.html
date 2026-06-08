@@ -89,7 +89,7 @@
                                 </button>
                                 {% endif %}
                                 {% if is_admin and not is_default_admin and not is_self %}
-                                <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" class="inline" onsubmit="return confirm('Delete user &quot;{{ user.username }}&quot;? This cannot be undone.');">
+                                <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" class="inline" onsubmit="return confirm('Delete user \u0022' + this.dataset.username + '\u0022? This cannot be undone.');" data-username="{{ user.username|e }}">
                                     <button type="submit" class="text-slate-400 hover:text-rose-400 transition-all duration-200 p-2 hover:bg-rose-500/10 rounded-lg" title="Delete user">
                                         <i class="fas fa-trash-alt text-xs"></i>
                                     </button>
@@ -119,10 +119,10 @@
 
 <!-- Modal for Add User -->
 {% if is_admin %}
-<div id="addUserModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+<div id="addUserModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4" role="dialog" aria-labelledby="addUserModalTitle" aria-modal="true">
     <div class="modal-content w-full max-w-lg rounded-2xl overflow-hidden animate-[fadeInUp_0.3s_ease-out]">
         <div class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-            <h3 class="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+            <h3 id="addUserModalTitle" class="text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 <i class="fas fa-user-plus text-indigo-400"></i> New Administrator
             </h3>
             <button type="button" data-modal-close="addUserModal" class="text-slate-500 hover:text-slate-300 transition-all p-1.5 hover:bg-white/5 rounded-lg" aria-label="Close">
@@ -199,10 +199,10 @@
 {% set can_edit_devices = is_admin and not is_default_admin %}
 {% if is_admin or is_self %}
 {% set allowed_ids = user.get_allowed_device_ids() %}
-<div id="editUserModal-{{ user.id }}" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+<div id="editUserModal-{{ user.id }}" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4" role="dialog" aria-labelledby="editUserModalTitle-{{ user.id }}" aria-modal="true">
     <div class="modal-content w-full max-w-lg rounded-2xl overflow-hidden animate-[fadeInUp_0.3s_ease-out]">
         <div class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-            <h3 class="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+            <h3 id="editUserModalTitle-{{ user.id }}" class="text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 <i class="fas fa-user-edit text-indigo-400"></i> Edit {{ user.username }}
             </h3>
             <button type="button" data-modal-close="editUserModal-{{ user.id }}" class="text-slate-500 hover:text-slate-300 transition-all p-1.5 hover:bg-white/5 rounded-lg" aria-label="Close">

@@ -119,8 +119,9 @@
             const row = [], cols = rows[i].querySelectorAll('td, th');
             
             for (let j = 0; j < cols.length; j++) {
-                // Clean up the text (remove extra spaces and newlines)
+                // Clean up the text (remove extra spaces and newlines) and escape CSV properly
                 let text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, "").trim();
+                text = text.replace(/"/g, '""');
                 row.push('"' + text + '"');
             }
             csv.push(row.join(","));

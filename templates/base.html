@@ -13,7 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    {% block extra_head %}{% endblock %}
     <script>
         // Immediately apply theme before HTML renders to prevent theme flash
         (function() {
@@ -103,6 +103,17 @@
         }
 
         * { box-sizing: border-box; }
+
+        /* ── Focus Visible for Keyboard Navigation ── */
+        button:focus-visible,
+        a:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible {
+            outline: 2px solid #6366f1;
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
@@ -469,6 +480,7 @@
             if (!restore) return;
             try {
                 const response = await fetch('/terminal/active-session-status');
+                if (!response.ok) throw new Error('Request failed');
                 const data = await response.json();
                 if (data.active) {
                     localStorage.setItem('activeTerminalDeviceId', data.device_id);
@@ -507,7 +519,10 @@
             if (category === 'success') iconClass = 'fa-check-circle';
             else if (category === 'error') iconClass = 'fa-circle-exclamation';
             
-            el.innerHTML = `<i class="fas ${iconClass}"></i> ${message}`;
+            const icon = document.createElement('i');
+            icon.className = `fas ${iconClass}`;
+            el.appendChild(icon);
+            el.appendChild(document.createTextNode(' ' + message));
             
             // Insert at the top of contentArea
             contentArea.insertBefore(el, contentArea.firstChild);
@@ -668,12 +683,17 @@
                 activeIndex = index;
             }
 
+            let searchController = null;
+
             async function runSearch(query) {
                 if (!query) { hideDropdown(); return; }
                 renderEmpty('Mencari...');
+                if (searchController) searchController.abort();
+                searchController = new AbortController();
                 try {
                     const res = await fetch('/api/search-devices?q=' + encodeURIComponent(query), {
-                        headers: { 'Accept': 'application/json' }
+                        headers: { 'Accept': 'application/json' },
+                        signal: searchController.signal
                     });
                     if (!res.ok) {
                         renderEmpty('Pencarian gagal.');
@@ -683,6 +703,7 @@
                     if (query !== lastQuery) return; // outdated response
                     renderResults(data.results || [], query);
                 } catch (err) {
+                    if (err.name === 'AbortError') return;
                     renderEmpty('Pencarian gagal: ' + (err && err.message ? err.message : err));
                 }
             }

@@ -6,7 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Device, Log
+from models import db, User, Device, Log, jakarta_now
 from paramiko_utils import check_router_status, get_interfaces, add_ip_address, remove_ip_address, no_shutdown_interface, shutdown_interface, get_device_hostname, show_version, show_running_config, run_cli_command
 from ssh_utils import run_batch_config
 from terminal_utils import connect_terminal_shell, read_shell_output, send_shell_command, close_terminal_shell
@@ -47,7 +47,39 @@ def grant_device_access(user, device_ids):
     user.allowed_devices = ','.join(str(i) for i in merged)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24)
+
+
+def _load_or_create_secret_key():
+    """Persist a stable SECRET_KEY so user sessions survive restarts.
+
+    Priority order:
+      1. ``FLASK_SECRET_KEY`` environment variable (recommended for prod).
+      2. ``instance/secret.key`` generated on first launch.
+    """
+    env_key = os.environ.get('FLASK_SECRET_KEY')
+    if env_key:
+        return env_key.encode('utf-8') if isinstance(env_key, str) else env_key
+
+    key_path = os.path.join('instance', 'secret.key')
+    instance_dir = os.path.dirname(key_path) or '.'
+    os.makedirs(instance_dir, exist_ok=True)
+    if os.path.exists(key_path):
+        with open(key_path, 'rb') as fh:
+            data = fh.read().strip()
+            if data:
+                return data
+    new_key = os.urandom(32)
+    with open(key_path, 'wb') as fh:
+        fh.write(new_key)
+    try:
+        os.chmod(key_path, 0o600)
+    except OSError:
+        # chmod is best-effort on Windows.
+        pass
+    return new_key
+
+
+app.config['SECRET_KEY'] = _load_or_create_secret_key()
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///network.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -67,9 +99,7 @@ def load_user(user_id):
 
 def log_action(action, level='INFO', device_id=None):
     user_id = current_user.id if current_user.is_authenticated else None
-    jakarta_tz = pytz.timezone('Asia/Jakarta')
-    timestamp = datetime.now(jakarta_tz)
-    new_log = Log(action=action, level=level, device_id=device_id, user_id=user_id, timestamp=timestamp)
+    new_log = Log(action=action, level=level, device_id=device_id, user_id=user_id, timestamp=jakarta_now())
     db.session.add(new_log)
     db.session.commit()
 
@@ -132,6 +162,31 @@ def ensure_user_allowed_devices_column():
 # We keep a simple flag to run the preparation only once.
 schema_prepared = False
 
+
+def ensure_default_admin():
+    """Create the default 'admin' account if it does not exist yet.
+
+    The seed password can be overridden via the ``DEFAULT_ADMIN_PASSWORD``
+    environment variable. A warning is printed when the fallback password is
+    used so operators are reminded to change it after first login.
+    """
+    if User.query.filter_by(username='admin').first():
+        return
+    seed_password = os.environ.get('DEFAULT_ADMIN_PASSWORD') or 'admin123'
+    admin = User(
+        username='admin',
+        password=generate_password_hash(seed_password),
+        allowed_devices='',
+    )
+    db.session.add(admin)
+    db.session.commit()
+    if not os.environ.get('DEFAULT_ADMIN_PASSWORD'):
+        print(
+            "[paramiko-web] Default admin user created with password 'admin123'. "
+            "Change it immediately via the user management page."
+        )
+
+
 @app.before_request
 def prepare_db_schema():
     """Check and update the DB schema on the first request.
@@ -151,6 +206,13 @@ def prepare_db_schema():
         db.create_all()
         ensure_device_port_column()
         ensure_user_allowed_devices_column()
+    # Make sure the default admin always exists so a fresh DB is usable
+    # without having to invoke the ``flask init-db`` CLI command.
+    try:
+        ensure_default_admin()
+    except OperationalError:
+        db.create_all()
+        ensure_default_admin()
     schema_prepared = True
 
 # --- Routes ---
@@ -477,7 +539,14 @@ def update_device(device_id):
     new_hostname = request.form.get('hostname')
     new_ip = request.form.get('ip')
     new_username = request.form.get('username')
-    new_port = int(request.form.get('port') or 22)
+    try:
+        new_port = int(request.form.get('port') or 22)
+    except (TypeError, ValueError):
+        flash('Port harus berupa angka antara 1 - 65535.', 'error')
+        return redirect(url_for('device_detail', device_id=device_id))
+    if not (1 <= new_port <= 65535):
+        flash('Port harus berupa angka antara 1 - 65535.', 'error')
+        return redirect(url_for('device_detail', device_id=device_id))
     new_password = request.form.get('password')
     password_to_verify = new_password if new_password else device.password
 
@@ -1000,17 +1069,29 @@ def active_session_status():
 
 @socketio.on('connect_terminal')
 def handle_terminal_connect(data):
-    device_id = data.get('device_id')
-    if device_id is not None:
-        device_id = str(device_id)
     sid = request.sid
 
     if not current_user.is_authenticated:
         emit('terminal_output', {'data': 'Authentication required\n'})
         return
 
+    raw_device_id = (data or {}).get('device_id')
+    try:
+        device_id_int = int(raw_device_id)
+    except (TypeError, ValueError):
+        emit('terminal_output', {'data': 'Invalid device id\n'})
+        return
+    device_id = str(device_id_int)
+
+    # Authorization: non-admin users may only open a terminal to devices
+    # that have been explicitly granted to them. Without this check, any
+    # authenticated user could connect to arbitrary devices via socket.io.
+    if current_user.username != 'admin' and device_id_int not in current_user.get_allowed_device_ids():
+        emit('terminal_output', {'data': 'Unauthorized: you do not have access to this device\n'}, room=sid)
+        return
+
     user_id = current_user.id
-    device = Device.query.get(device_id)
+    device = Device.query.get(device_id_int)
 
     if not device:
         emit('terminal_output', {'data': 'Device not found\n'})
@@ -1024,13 +1105,16 @@ def handle_terminal_connect(data):
             if str(session['device_id']) == device_id and session['shell'] and not session['shell'].closed:
                 # Add new sid to the set of tracking sids
                 session['sids'].add(sid)
-                
+
                 # Emit connection confirmation and the accumulated output buffer
                 emit('terminal_output', {'data': '\n[Reconnected to existing session]\n\n'}, room=sid)
                 emit('terminal_output', {'data': session['output_buffer']}, room=sid)
                 return
             else:
-                # Close the old session
+                # Close the old session. The previous background_thread will
+                # observe the missing/changed session token on its next tick
+                # and exit cleanly, so we won't end up with two pollers on the
+                # same channel.
                 close_terminal_shell(session['client'], session['shell'])
                 if user_id in active_shells:
                     del active_shells[user_id]
@@ -1046,38 +1130,69 @@ def handle_terminal_connect(data):
         emit('terminal_output', {'data': f'Connection failed: {msg}\n'})
         return
 
+    # Each session gets a unique token so the background reader can detect
+    # session replacement (e.g. user switches device) and exit instead of
+    # racing against the new poller on a different channel.
+    session_token = os.urandom(8).hex()
+
     with active_shells_lock:
         active_shells[user_id] = {
             'shell': shell,
             'client': client,
             'device_id': device_id,
             'output_buffer': '',
-            'sids': {sid}
+            'sids': {sid},
+            'token': session_token,
         }
 
     initial_output = read_shell_output(shell, 0.5)
     if initial_output:
         with active_shells_lock:
-            if user_id in active_shells:
+            if user_id in active_shells and active_shells[user_id]['token'] == session_token:
                 active_shells[user_id]['output_buffer'] += initial_output
         emit('terminal_output', {'data': initial_output}, room=sid)
 
-    def background_thread(u_id):
+    def background_thread(u_id, token):
         while True:
             with active_shells_lock:
-                if u_id not in active_shells:
+                session_info = active_shells.get(u_id)
+                # Exit when our session has been replaced or removed so that
+                # only one poller per shell stays alive.
+                if not session_info or session_info.get('token') != token:
                     break
-                session_info = active_shells[u_id]
                 sh = session_info['shell']
                 sids = list(session_info['sids'])
-            
+
+            # Detect remote-side closure (paramiko exposes exit_status_ready /
+            # closed on the channel). Without this the loop would idle forever
+            # because recv_ready stays False on a dead channel.
+            try:
+                if sh is None or sh.closed or sh.exit_status_ready():
+                    with active_shells_lock:
+                        current = active_shells.get(u_id)
+                        if current and current.get('token') == token:
+                            close_terminal_shell(current['client'], current['shell'])
+                            del active_shells[u_id]
+                    for s in sids:
+                        socketio.emit(
+                            'terminal_output',
+                            {'data': '\n[Session ended by remote device]\n'},
+                            room=s,
+                        )
+                    break
+            except Exception:
+                break
+
             try:
                 if sh.recv_ready():
                     output = sh.recv(4096).decode('utf-8', errors='ignore')
                     if output:
                         with active_shells_lock:
-                            if u_id in active_shells:
-                                active_shells[u_id]['output_buffer'] += output
+                            current = active_shells.get(u_id)
+                            if current and current.get('token') == token:
+                                current['output_buffer'] += output
+                            else:
+                                break
                         # Emit output to all connected SIDs of this user
                         for s in sids:
                             socketio.emit('terminal_output', {'data': output}, room=s)
@@ -1085,7 +1200,7 @@ def handle_terminal_connect(data):
                 break
             socketio.sleep(0.1)
 
-    socketio.start_background_task(background_thread, user_id)
+    socketio.start_background_task(background_thread, user_id, session_token)
 
 @socketio.on('terminal_input')
 def handle_terminal_input(data):

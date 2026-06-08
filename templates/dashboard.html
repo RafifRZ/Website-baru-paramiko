@@ -133,7 +133,7 @@
                                 <i class="fas fa-pencil text-[10px]"></i>
                             </button>
                             <form action="{{ url_for('delete_device', device_id=device.id) }}" method="POST" class="inline"
-                                onsubmit="return confirm('Hapus perangkat {{ device.hostname }}?')">
+                                onsubmit="return confirm('Hapus perangkat ' + this.dataset.hostname + '?')" data-hostname="{{ device.hostname|e }}">
                                 <button type="submit"
                                     class="w-8 h-8 rounded-lg glass-card flex items-center justify-center text-[#525a6e] hover:text-rose-400 hover:border-rose-400/20 transition-all" title="Delete">
                                     <i class="fas fa-trash-alt text-[10px]"></i>
@@ -177,10 +177,11 @@
 <!-- Modal for Add Device -->
 <div id="addDeviceModal"
     class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4"
+    role="dialog" aria-labelledby="addDeviceModalTitle" aria-modal="true"
     onclick="if(event.target===this) closeAddModal()">
     <div class="modal-content w-full max-w-lg rounded-2xl overflow-hidden animate-modal">
         <div class="px-8 py-6 flex justify-between items-center" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
-            <h3 class="text-lg font-extrabold text-white tracking-tight">Register Device</h3>
+            <h3 id="addDeviceModalTitle" class="text-lg font-extrabold text-white tracking-tight">Register Device</h3>
             <button onclick="closeAddModal()"
                 class="w-8 h-8 rounded-lg flex items-center justify-center text-[#525a6e] hover:text-white hover:bg-white/5 transition-all">
                 <i class="fas fa-times text-sm"></i>
@@ -282,10 +283,11 @@
 <!-- Modal for Edit Device -->
 <div id="editDeviceModal"
     class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4"
+    role="dialog" aria-labelledby="editDeviceModalTitle" aria-modal="true"
     onclick="if(event.target===this) closeEditModal()">
     <div class="modal-content w-full max-w-lg rounded-2xl overflow-hidden animate-modal">
         <div class="px-8 py-6 flex justify-between items-center" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
-            <h3 class="text-lg font-extrabold text-white tracking-tight">Update Device Info</h3>
+            <h3 id="editDeviceModalTitle" class="text-lg font-extrabold text-white tracking-tight">Update Device Info</h3>
             <button onclick="closeEditModal()"
                 class="w-8 h-8 rounded-lg flex items-center justify-center text-[#525a6e] hover:text-white hover:bg-white/5 transition-all">
                 <i class="fas fa-times text-sm"></i>
@@ -561,6 +563,7 @@
                 method: 'POST',
                 body: data,
             });
+            if (!response.ok) throw new Error('Server error');
             const result = await response.json();
 
             if (result.success) {
@@ -614,6 +617,7 @@
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             });
+            if (!response.ok) throw new Error('Server error');
             const data = await response.json();
             
             if (data.success) {

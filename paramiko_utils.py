@@ -1,5 +1,74 @@
 import paramiko
 import time
+import re
+
+# IOS / IOS-XE error markers that may appear after sending a config command.
+# When any of these are found in the captured output we treat the operation as
+# failed instead of silently reporting success.
+_IOS_ERROR_PATTERNS = (
+    re.compile(r'%\s*Invalid input', re.IGNORECASE),
+    re.compile(r'%\s*Incomplete command', re.IGNORECASE),
+    re.compile(r'%\s*Ambiguous command', re.IGNORECASE),
+    re.compile(r'%\s*Unknown command', re.IGNORECASE),
+    re.compile(r'%\s*Bad mask', re.IGNORECASE),
+    re.compile(r'%\s*Overlaps with', re.IGNORECASE),
+    re.compile(r'%\s*Inconsistent address', re.IGNORECASE),
+    re.compile(r'%\s*Cannot apply', re.IGNORECASE),
+    re.compile(r'%\s*Not enough', re.IGNORECASE),
+    re.compile(r'%\s*Configuration command rejected', re.IGNORECASE),
+    re.compile(r'^Command rejected:', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^ERROR:', re.IGNORECASE | re.MULTILINE),
+)
+
+
+def _detect_ios_error(output: str):
+    """Return the matched error line when output contains an IOS error marker."""
+    if not output:
+        return None
+    for pattern in _IOS_ERROR_PATTERNS:
+        m = pattern.search(output)
+        if not m:
+            continue
+        # Capture the full line containing the marker for a better message.
+        start = output.rfind('\n', 0, m.start()) + 1
+        end = output.find('\n', m.end())
+        if end == -1:
+            end = len(output)
+        return output[start:end].strip()
+    return None
+
+
+def _run_config_commands(shell, commands, per_cmd_timeout=2.5):
+    """Send a list of config commands sequentially, collecting CLI output.
+
+    Each command is given up to ``per_cmd_timeout`` seconds to drain its
+    response (we read until the channel goes idle for ~0.4s). The aggregated
+    output is returned so callers can detect IOS error markers.
+    """
+    aggregated = ''
+    for cmd in commands:
+        if not cmd.endswith('\n'):
+            cmd = cmd + '\n'
+        shell.send(cmd)
+        deadline = time.time() + per_cmd_timeout
+        last_data_at = time.time()
+        while time.time() < deadline:
+            if shell.recv_ready():
+                aggregated += shell.recv(4096).decode('utf-8', errors='ignore')
+                last_data_at = time.time()
+            elif time.time() - last_data_at > 0.4:
+                break
+            else:
+                time.sleep(0.1)
+    # Final drain for any trailing async output (e.g. "[OK]" after write mem).
+    drain_deadline = time.time() + 1.5
+    while time.time() < drain_deadline:
+        if shell.recv_ready():
+            aggregated += shell.recv(4096).decode('utf-8', errors='ignore')
+        else:
+            time.sleep(0.1)
+    return aggregated
+
 
 class ParamikoUtils:
     def __init__(self, ip, username, password, port=22):
@@ -136,18 +205,23 @@ class ParamikoUtils:
                 pass # Use default mask
         try:
             shell = self.client.invoke_shell()
+            time.sleep(0.3)
+            if shell.recv_ready():
+                shell.recv(65535)
             commands = [
-                f'configure terminal\n',
-                f'interface {interface}\n',
-                f'ip address {ip_addr} {mask}\n',
-                'no shutdown\n',
-                'end\n',
-                'write memory\n'
+                'terminal length 0',
+                'configure terminal',
+                f'interface {interface}',
+                f'ip address {ip_addr} {mask}',
+                'no shutdown',
+                'end',
+                'write memory',
             ]
-            for cmd in commands:
-                shell.send(cmd)
-                time.sleep(2)
+            output = _run_config_commands(shell, commands)
             shell.close()
+            err = _detect_ios_error(output)
+            if err:
+                return False, f"Device rejected command: {err}"
             return True, "IP address added successfully"
         except Exception as e:
             return False, str(e)
@@ -162,18 +236,23 @@ class ParamikoUtils:
 
         try:
             shell = self.client.invoke_shell()
-            ip_cmd = f'no ip address {ip_addr}\n' if ip_addr else 'no ip address\n'
+            time.sleep(0.3)
+            if shell.recv_ready():
+                shell.recv(65535)
+            ip_cmd = f'no ip address {ip_addr}' if ip_addr else 'no ip address'
             commands = [
-                f'configure terminal\n',
-                f'interface {interface}\n',
+                'terminal length 0',
+                'configure terminal',
+                f'interface {interface}',
                 ip_cmd,
-                'end\n',
-                'write memory\n'
+                'end',
+                'write memory',
             ]
-            for cmd in commands:
-                shell.send(cmd)
-                time.sleep(1)
+            output = _run_config_commands(shell, commands)
             shell.close()
+            err = _detect_ios_error(output)
+            if err:
+                return False, f"Device rejected command: {err}"
             return True, "IP address removed successfully"
         except Exception as e:
             return False, str(e)
@@ -188,17 +267,22 @@ class ParamikoUtils:
 
         try:
             shell = self.client.invoke_shell()
+            time.sleep(0.3)
+            if shell.recv_ready():
+                shell.recv(65535)
             commands = [
-                f'configure terminal\n',
-                f'interface {interface}\n',
-                'no shutdown\n',
-                'end\n',
-                'write memory\n'
+                'terminal length 0',
+                'configure terminal',
+                f'interface {interface}',
+                'no shutdown',
+                'end',
+                'write memory',
             ]
-            for cmd in commands:
-                shell.send(cmd)
-                time.sleep(1)
+            output = _run_config_commands(shell, commands)
             shell.close()
+            err = _detect_ios_error(output)
+            if err:
+                return False, f"Device rejected command: {err}"
             return True, "Interface enabled successfully"
         except Exception as e:
             return False, str(e)
@@ -213,17 +297,22 @@ class ParamikoUtils:
 
         try:
             shell = self.client.invoke_shell()
+            time.sleep(0.3)
+            if shell.recv_ready():
+                shell.recv(65535)
             commands = [
-                f'configure terminal\n',
-                f'interface {interface}\n',
-                'shutdown\n',
-                'end\n',
-                'write memory\n'
+                'terminal length 0',
+                'configure terminal',
+                f'interface {interface}',
+                'shutdown',
+                'end',
+                'write memory',
             ]
-            for cmd in commands:
-                shell.send(cmd)
-                time.sleep(1)
+            output = _run_config_commands(shell, commands)
             shell.close()
+            err = _detect_ios_error(output)
+            if err:
+                return False, f"Device rejected command: {err}"
             return True, "Interface disabled successfully"
         except Exception as e:
             return False, str(e)
