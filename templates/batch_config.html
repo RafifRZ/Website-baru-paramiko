@@ -94,7 +94,7 @@
         <h3 class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
             <i class="fas fa-layer-group text-indigo-400"></i> Batch Configuration
         </h3>
-        <p class="text-slate-500 mt-1 text-[10px] font-black uppercase tracking-widest">Execute configurations across multiple nodes simultaneously using CSV or raw CLI commands.</p>
+        <p class="text-slate-500 mt-1 text-[10px] font-black uppercase tracking-widest">Execute raw CLI commands across multiple nodes simultaneously.</p>
     </div>
 
     <form action="{{ url_for('batch_config') }}" method="POST" enctype="multipart/form-data" class="no-print">
@@ -136,16 +136,6 @@
         </div>
 
         <div class="glass-card rounded-[2rem] overflow-hidden mb-10">
-            <!-- Tabs Header -->
-            <div class="px-8 py-5 bg-white/1 border-b border-white/5 flex items-center gap-8">
-                <button type="button" id="tab-csv" onclick="switchTab('csv')" class="tab-btn pb-3 border-b-2 border-indigo-500 text-indigo-400 text-xs font-bold uppercase tracking-wider focus:outline-none transition-all duration-300">
-                    CSV Mode
-                </button>
-                <button type="button" id="tab-raw" onclick="switchTab('raw')" class="tab-btn pb-3 border-b-2 border-transparent text-slate-500 text-xs font-bold uppercase tracking-wider hover:text-slate-300 transition-all duration-300 focus:outline-none">
-                    Raw CLI Mode
-                </button>
-            </div>
-
             <div class="p-8 space-y-8">
                 <!-- Alert Info -->
                 <div class="p-5 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 flex items-start gap-4">
@@ -153,48 +143,20 @@
                         <i class="fas fa-circle-info text-sm"></i>
                     </div>
                     <div>
-                        <h4 class="text-sm font-bold text-indigo-400 tracking-tight">Mode Panduan</h4>
-                        <p id="mode-desc" class="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">Format CSV: <span class="bg-[#141420] border border-white/5 px-2 py-0.5 rounded text-indigo-400 font-mono">command</span></p>
+                        <h4 class="text-sm font-bold text-indigo-400 tracking-tight">Raw CLI Mode</h4>
+                        <p class="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">Execute raw Cisco IOS commands directly on selected devices.</p>
                     </div>
                 </div>
 
-                <!-- CSV Input Section -->
-                <div id="section-csv" class="space-y-6">
-                    <div class="space-y-4">
-                        <div class="flex items-center gap-2">
-                            <i class="fas fa-file-csv text-slate-500"></i>
-                            <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Upload CSV File</h4>
-                        </div>
-                        <div class="p-8 bg-white/1 border border-white/5 rounded-[2rem] border-dashed text-center hover:bg-white/2 transition-all">
-                            <input type="file" name="csv_file" class="hidden" id="csv-file-input" onchange="updateFileName(this)">
-                            <label for="csv-file-input" class="cursor-pointer group">
-                                <div class="w-16 h-16 bg-white/5 rounded-full border border-white/5 flex items-center justify-center mx-auto mb-4 text-indigo-400 group-hover:scale-105 transition-all">
-                                    <i class="fas fa-cloud-upload-alt text-2xl"></i>
-                                </div>
-                                <p id="file-name" class="text-sm font-bold text-slate-300 tracking-tight">Klik untuk pilih file CSV</p>
-                                <p class="text-[10px] font-semibold text-slate-500 mt-1 uppercase tracking-wider">Format Kolom: 'command'</p>
-                            </label>
-                        </div>
-                        
-                        <div class="flex items-center gap-2 pt-4">
-                            <i class="fas fa-keyboard text-slate-500"></i>
-                            <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Atau Paste Manual (Satu Per Baris)</h4>
-                        </div>
-                        <div class="relative group">
-                            <textarea name="raw_commands" id="raw-commands-text" rows="5" class="w-full p-6 input-dark rounded-2xl text-xs font-semibold focus:outline-none placeholder:text-slate-600 font-mono" placeholder="interface GigabitEthernet0/1&#10;ip address 192.168.1.1 255.255.255.0&#10;no shutdown"></textarea>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Raw CLI Section (Hidden by default) -->
-                <div id="section-raw" class="hidden space-y-6">
+                <!-- Raw CLI Section -->
+                <div class="space-y-6">
                     <div class="space-y-4">
                         <div class="flex items-center gap-2">
                             <i class="fas fa-terminal text-slate-500"></i>
                             <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Raw Cisco Commands</h4>
                         </div>
                         <div class="relative group">
-                            <textarea id="raw-cli-text" rows="8" class="w-full p-6 bg-[#05050a] text-emerald-400 font-mono text-xs rounded-2xl border border-white/5 focus:outline-none placeholder:text-slate-700" placeholder="! Masukkan perintah cisco, dipisahkan per baris&#10;router ospf 1&#10; network 10.0.0.0 0.255.255.255 area 0"></textarea>
+                            <textarea name="raw_commands" rows="8" class="w-full p-6 bg-[#05050a] text-emerald-400 font-mono text-xs rounded-2xl border border-white/5 focus:outline-none placeholder:text-slate-700" placeholder="! Masukkan perintah cisco, dipisahkan per baris&#10;router ospf 1&#10; network 10.0.0.0 0.255.255.255 area 0"></textarea>
                         </div>
                     </div>
                 </div>
@@ -269,60 +231,7 @@
 </div>
 
 <script>
-    function updateFileName(input) {
-        const fileName = input.files[0] ? input.files[0].name : "Klik untuk pilih file CSV";
-        const label = document.getElementById('file-name');
-        label.innerText = fileName;
-        if (input.files[0]) {
-            label.classList.remove('text-slate-300');
-            label.classList.add('text-indigo-400');
-        } else {
-            label.classList.remove('text-indigo-400');
-            label.classList.add('text-slate-300');
-        }
-    }
-
-    function switchTab(mode) {
-        const csvBtn = document.getElementById('tab-csv');
-        const rawBtn = document.getElementById('tab-raw');
-        const csvSec = document.getElementById('section-csv');
-        const rawSec = document.getElementById('section-raw');
-        const desc = document.getElementById('mode-desc');
-        const rawCommandsText = document.getElementById('raw-commands-text');
-        const rawCliText = document.getElementById('raw-cli-text');
-
-        if (mode === 'csv') {
-            csvBtn.classList.add('border-indigo-500', 'text-indigo-400');
-            csvBtn.classList.remove('border-transparent', 'text-slate-500');
-            rawBtn.classList.remove('border-indigo-500', 'text-indigo-400');
-            rawBtn.classList.add('border-transparent', 'text-slate-500');
-            csvSec.classList.remove('hidden');
-            rawSec.classList.add('hidden');
-            desc.innerHTML = 'Format CSV: <span class="bg-[#141420] border border-white/5 px-2 py-0.5 rounded text-indigo-400 font-mono">command</span>';
-
-            if (rawCliText && rawCommandsText) {
-                rawCommandsText.name = "raw_commands";
-                rawCliText.name = "";
-            }
-        } else {
-            rawBtn.classList.add('border-indigo-500', 'text-indigo-400');
-            rawBtn.classList.remove('border-transparent', 'text-slate-500');
-            csvBtn.classList.remove('border-indigo-500', 'text-indigo-400');
-            csvBtn.classList.add('border-transparent', 'text-slate-500');
-            rawSec.classList.remove('hidden');
-            csvSec.classList.add('hidden');
-            desc.innerHTML = 'Execute raw Cisco IOS commands directly on selected devices.';
-
-            if (rawCliText && rawCommandsText) {
-                rawCliText.name = "raw_commands";
-                rawCommandsText.name = "";
-            }
-        }
-    }
-
     document.addEventListener('DOMContentLoaded', function() {
-        switchTab('csv');
-
         // Auto-scroll to results when present
         const printArea = document.getElementById('batch-print-area');
         if (printArea) {

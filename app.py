@@ -12,7 +12,6 @@ from ssh_utils import run_batch_config
 from terminal_utils import connect_terminal_shell, read_shell_output, send_shell_command, close_terminal_shell
 from crypto_utils import encrypt_password, decrypt_password
 import csv
-import pandas as pd
 import io
 from datetime import datetime
 import pytz
@@ -699,19 +698,9 @@ def batch_config():
         # Collect selected device IDs and command sources
         device_ids = request.form.getlist('devices')
         raw_commands = request.form.get('raw_commands')
-        csv_file = request.files.get('csv_file')
 
         # Build command list
         commands: list[str] = []
-        if csv_file:
-            try:
-                df = pd.read_csv(io.StringIO(csv_file.read().decode('utf-8')))
-                # Prefer a column named 'command', otherwise take the first column
-                commands = df['command'].tolist() if 'command' in df.columns else df.iloc[:, 0].tolist()
-            except Exception as e:
-                flash(f"Error reading CSV: {e}", 'error')
-                return redirect(url_for('batch_config'))
-
         if raw_commands:
             commands.extend([c.strip() for c in raw_commands.split('\n') if c.strip()])
 
