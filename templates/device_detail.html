@@ -156,7 +156,18 @@
                     <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Add IP, remove IP, shutdown, atau no shutdown</p>
                 </div>
             </div>
-            <form action="{{ url_for('configure_ip', device_id=device.id) }}" method="POST" class="p-8 space-y-6">
+            <div class="p-8 pb-0 space-y-4">
+                <div class="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 flex items-start gap-3">
+                    <div class="w-6 h-6 bg-rose-500/20 text-rose-300 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <i class="fas fa-exclamation-triangle text-xs"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-rose-200 mb-1">⚠️ Peringatan Penting</p>
+                        <p class="text-[11px] text-rose-100/80 leading-relaxed">Jika interface yang diubah adalah interface manajemen yang IP-nya terdaftar di dashboard, IP perangkat di dashboard akan otomatis ikut diganti ke IP baru. Perubahan ini dapat memutus koneksi SSH jika IP baru belum dapat dijangkau.</p>
+                    </div>
+                </div>
+            </div>
+            <form action="{{ url_for('configure_ip', device_id=device.id) }}" method="POST" class="p-8 space-y-6" onsubmit="return confirm('PERINGATAN!\n\nJika interface ini adalah interface manajemen yang IP-nya terdaftar di dashboard, IP perangkat di dashboard akan otomatis ikut berubah ke IP baru. Perubahan ini juga dapat memutus koneksi SSH.\n\nPastikan IP baru sudah benar dan bisa dijangkau. Lanjutkan konfigurasi?')">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Interface</label>

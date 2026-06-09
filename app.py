@@ -26,6 +26,12 @@ def get_user_devices():
         return []
     return Device.query.filter(Device.id.in_(allowed_ids)).all()
 
+def normalize_ip_address(ip_value):
+    """Return only the IP address part from a plain IP or CIDR value."""
+    if not ip_value:
+        return ''
+    return ip_value.strip().split('/')[0]
+
 
 def grant_device_access(user, device_ids):
     """Append device_ids to a user's allowed_devices list (idempotent).
@@ -660,6 +666,18 @@ def configure_ip(device_id):
     interface = request.form.get('interface')
     action = request.form.get('action')
     ip_raw = request.form.get('ip')
+    management_ip_before = normalize_ip_address(device.ip_address)
+    interface_ip_before = ''
+    is_management_interface = False
+
+    current_interfaces = _interfaces_cache_get(device.id) or get_interfaces(device.ip_address, device.username, device.password, device.port or 22)
+    if current_interfaces:
+        _interfaces_cache_set(device.id, current_interfaces)
+        for iface in current_interfaces:
+            if iface.get('name') == interface:
+                interface_ip_before = normalize_ip_address(iface.get('ip'))
+                is_management_interface = interface_ip_before == management_ip_before
+                break
 
     if action == 'Add IP':
         if not ip_raw:
@@ -678,6 +696,18 @@ def configure_ip(device_id):
         return redirect(url_for('device_detail', device_id=device_id))
     
     if success:
+        # Refresh interface snapshot so search / interface pages see the new configuration
+        new_management_ip = normalize_ip_address(ip_raw)
+        if action == 'Add IP' and is_management_interface and new_management_ip:
+            old_management_ip = device.ip_address
+            device.ip_address = new_management_ip
+            db.session.commit()
+            log_action(f"Updated dashboard IP for {device.hostname}: {old_management_ip} -> {new_management_ip} via {interface}", device_id=device.id)
+            flash(f'IP dashboard ikut diperbarui: {old_management_ip} → {new_management_ip}', 'warning')
+
+        updated_interfaces = get_interfaces(device.ip_address, device.username, device.password, device.port or 22)
+        _interfaces_cache_set(device.id, updated_interfaces)
+        
         log_action(f"Performed {action} on {interface} ({ip_raw or ''}) for {device.hostname}", device_id=device.id)
         flash(f'Successfully performed {action} on {interface}', 'success')
     else:
