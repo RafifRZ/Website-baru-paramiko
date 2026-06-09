@@ -38,11 +38,11 @@ def _detect_ios_error(output: str):
     return None
 
 
-def _run_config_commands(shell, commands, per_cmd_timeout=2.5):
+def _run_config_commands(shell, commands, per_cmd_timeout=1.2):
     """Send a list of config commands sequentially, collecting CLI output.
 
     Each command is given up to ``per_cmd_timeout`` seconds to drain its
-    response (we read until the channel goes idle for ~0.4s). The aggregated
+    response (we read until the channel goes idle for ~0.2s). The aggregated
     output is returned so callers can detect IOS error markers.
     """
     aggregated = ''
@@ -56,17 +56,17 @@ def _run_config_commands(shell, commands, per_cmd_timeout=2.5):
             if shell.recv_ready():
                 aggregated += shell.recv(4096).decode('utf-8', errors='ignore')
                 last_data_at = time.time()
-            elif time.time() - last_data_at > 0.4:
+            elif time.time() - last_data_at > 0.2:
                 break
             else:
-                time.sleep(0.1)
+                time.sleep(0.05)
     # Final drain for any trailing async output (e.g. "[OK]" after write mem).
-    drain_deadline = time.time() + 1.5
+    drain_deadline = time.time() + 0.6
     while time.time() < drain_deadline:
         if shell.recv_ready():
             aggregated += shell.recv(4096).decode('utf-8', errors='ignore')
         else:
-            time.sleep(0.1)
+            time.sleep(0.05)
     return aggregated
 
 

@@ -163,18 +163,18 @@
                     </div>
                     <div>
                         <p class="text-xs font-bold text-rose-200 mb-1">⚠️ Peringatan Penting</p>
-                        <p class="text-[11px] text-rose-100/80 leading-relaxed">Jika interface yang diubah adalah interface manajemen yang IP-nya terdaftar di dashboard, IP perangkat di dashboard akan otomatis ikut diganti ke IP baru. Perubahan ini dapat memutus koneksi SSH jika IP baru belum dapat dijangkau.</p>
+                        <p class="text-[11px] text-rose-100/80 leading-relaxed">Peringatan konfirmasi akan menampilkan nama interface dan IP yang akan diubah. Jika interface tersebut adalah interface manajemen yang IP-nya terdaftar di dashboard, IP perangkat di dashboard akan otomatis ikut diganti ke IP baru.</p>
                     </div>
                 </div>
             </div>
-            <form action="{{ url_for('configure_ip', device_id=device.id) }}" method="POST" class="p-8 space-y-6" onsubmit="return confirm('PERINGATAN!\n\nJika interface ini adalah interface manajemen yang IP-nya terdaftar di dashboard, IP perangkat di dashboard akan otomatis ikut berubah ke IP baru. Perubahan ini juga dapat memutus koneksi SSH.\n\nPastikan IP baru sudah benar dan bisa dijangkau. Lanjutkan konfigurasi?')">
+            <form action="{{ url_for('configure_ip', device_id=device.id) }}" method="POST" class="p-8 space-y-6" onsubmit="return confirmInterfaceConfig()">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Interface</label>
-                        <select name="interface" class="w-full px-5 py-4 input-dark rounded-2xl text-sm font-semibold focus:outline-none appearance-none cursor-pointer">
+                        <select id="interfaceSelect" name="interface" class="w-full px-5 py-4 input-dark rounded-2xl text-sm font-semibold focus:outline-none appearance-none cursor-pointer">
                             {% if interfaces %}
                             {% for interface in interfaces %}
-                            <option value="{{ interface.name }}" class="bg-[#141420] text-white">{{ interface.name }} | {{ interface.ip or 'unassigned' }}</option>
+                            <option value="{{ interface.name }}" data-ip="{{ interface.ip or 'unassigned' }}" class="bg-[#141420] text-white">{{ interface.name }} | {{ interface.ip or 'unassigned' }}</option>
                             {% endfor %}
                             {% else %}
                             <option value="" disabled selected class="bg-[#141420] text-white">No interfaces found</option>
@@ -346,6 +346,41 @@
                 ipInput.placeholder = 'Not required';
                 hint.innerText = `Value tidak diperlukan untuk ${action.value}.`;
             }
+        }
+
+        function normalizeIp(value) {
+            return (value || '').trim().split('/')[0];
+        }
+
+        function confirmInterfaceConfig() {
+            const interfaceSelect = document.getElementById('interfaceSelect');
+            const action = document.getElementById('actionSelect');
+            const ipInput = document.getElementById('ipValueInput');
+
+            if (!interfaceSelect || !action) {
+                return confirm('Lanjutkan konfigurasi interface?');
+            }
+
+            const selectedOption = interfaceSelect.options[interfaceSelect.selectedIndex];
+            const interfaceName = selectedOption ? selectedOption.value : '-';
+            const currentIp = selectedOption ? (selectedOption.dataset.ip || 'unassigned') : 'unassigned';
+            const newIp = ipInput ? normalizeIp(ipInput.value) : '';
+            const dashboardIp = normalizeIp('{{ device.ip_address }}');
+            const isManagementInterface = normalizeIp(currentIp) === dashboardIp;
+
+            let message = `PERINGATAN!\n\nInterface: ${interfaceName}\nIP saat ini: ${currentIp}\nAction: ${action.value}`;
+
+            if (action.value === 'Add IP') {
+                message += `\nIP baru: ${newIp || '-'}`;
+                if (isManagementInterface) {
+                    message += `\n\nInterface ${interfaceName} memakai IP dashboard (${dashboardIp}). Jika konfigurasi berhasil, IP perangkat di dashboard akan otomatis berubah menjadi ${newIp}.`;
+                }
+            } else if (action.value === 'Remove IP' && isManagementInterface) {
+                message += `\n\nInterface ${interfaceName} memakai IP dashboard (${dashboardIp}). Menghapus IP ini dapat membuat perangkat tidak bisa dijangkau dari dashboard.`;
+            }
+
+            message += '\n\nPerubahan konfigurasi dapat memutus koneksi SSH jika IP baru belum bisa dijangkau. Lanjutkan?';
+            return confirm(message);
         }
 
         document.addEventListener('DOMContentLoaded', function () {

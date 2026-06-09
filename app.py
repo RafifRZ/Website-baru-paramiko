@@ -245,6 +245,7 @@ def login():
             login_user(user)
             return redirect(url_for('dashboard'))
         flash('Invalid username or password', 'error')
+
     return render_template('login.html')
 
 @app.route('/logout')
@@ -705,8 +706,7 @@ def configure_ip(device_id):
             log_action(f"Updated dashboard IP for {device.hostname}: {old_management_ip} -> {new_management_ip} via {interface}", device_id=device.id)
             flash(f'IP dashboard ikut diperbarui: {old_management_ip} → {new_management_ip}', 'warning')
 
-        updated_interfaces = get_interfaces(device.ip_address, device.username, device.password, device.port or 22)
-        _interfaces_cache_set(device.id, updated_interfaces)
+        _interfaces_cache_update_local(device.id, interface, action, ip_raw)
         
         log_action(f"Performed {action} on {interface} ({ip_raw or ''}) for {device.hostname}", device_id=device.id)
         flash(f'Successfully performed {action} on {interface}', 'success')
@@ -1047,6 +1047,32 @@ def _interfaces_cache_get(device_id):
     if _time.time() - ts > _INTERFACES_CACHE_TTL:
         return None
     return ifs
+
+def _interfaces_cache_update_local(device_id, interface_name, action, ip_raw=None):
+    """Update cached interface snapshot after a successful config command."""
+    cached = _interfaces_cache_get(device_id)
+    if not cached:
+        return
+
+    new_ip = normalize_ip_address(ip_raw)
+    for iface in cached:
+        if iface.get('name') != interface_name:
+            continue
+        if action == 'Add IP' and new_ip:
+            iface['ip'] = new_ip
+            iface['status'] = 'up'
+            iface['protocol'] = 'up'
+        elif action == 'Remove IP':
+            iface['ip'] = 'unassigned'
+        elif action == 'No Shutdown':
+            iface['status'] = 'up'
+            iface['protocol'] = 'up'
+        elif action == 'Shutdown':
+            iface['status'] = 'administratively down'
+            iface['protocol'] = 'down'
+        break
+
+    _interfaces_cache_set(device_id, cached)
 
 @app.route('/logs/clear', methods=['POST'])
 @login_required
